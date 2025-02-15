@@ -151,7 +151,6 @@
     <ClCompile Include="BB\SDK_HEADERS\PoplarGame_classes.cpp" />
     <ClCompile Include="BB\SDK_HEADERS\WillowGame_classes.cpp" />
     <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="jsoncpp.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -160,12 +159,6 @@
     </ClCompile>
     <ClCompile Include="safetyhook.cpp" />
     <ClCompile Include="Zydis.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <Library Include="libcrypto.lib" />
-    <Library Include="libcrypto_static.lib" />
-    <Library Include="libssl.lib" />
-    <Library Include="libssl_static.lib" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

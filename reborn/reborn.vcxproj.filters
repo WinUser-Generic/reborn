@@ -19,12 +19,6 @@
     <Filter Include="Safetyhook">
       <UniqueIdentifier>{6c28116f-8859-46be-ad5f-6590ef4dd120}</UniqueIdentifier>
     </Filter>
-    <Filter Include="JsonCPP">
-      <UniqueIdentifier>{dd0589cd-41d2-4bbb-a035-e99d561ca96d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="JsonCPP\OpenSSL">
-      <UniqueIdentifier>{ea667db7-de3d-489f-a29a-3636d0881d43}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -62,22 +56,5 @@
     <ClCompile Include="safetyhook.cpp">
       <Filter>Safetyhook</Filter>
     </ClCompile>
-    <ClCompile Include="jsoncpp.cpp">
-      <Filter>JsonCPP</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Library Include="libcrypto_static.lib">
-      <Filter>JsonCPP\OpenSSL</Filter>
-    </Library>
-    <Library Include="libssl_static.lib">
-      <Filter>JsonCPP\OpenSSL</Filter>
-    </Library>
-    <Library Include="libssl.lib">
-      <Filter>JsonCPP\OpenSSL</Filter>
-    </Library>
-    <Library Include="libcrypto.lib">
-      <Filter>JsonCPP\OpenSSL</Filter>
-    </Library>
   </ItemGroup>
 </Project>
