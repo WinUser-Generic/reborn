@@ -81,8 +81,6 @@ namespace EngineLogic {
 
 namespace ServerNetworking {
     void InitListen() {
-        SDKUtils::ListAllOfClass<UGameEngine>();
-
         SDKUtils::GetLastOfClass<UGameEngine>()->CreateNamedNetDriver(FName(020724));
 
         UTcpNetDriver* NetDriver = SDKUtils::GetLastOfClass<UTcpNetDriver>();
@@ -183,15 +181,15 @@ namespace ServerNetworking {
                     }
                 }
 
-                if (channel && actor && channel->NumOutRec < 0xFE && !(*(uint8_t*)(channel + 0xC0) & 0x10)) {
+                if (channel && actor && channel->NumOutRec < 0xFE) { //&& !(*(uint8_t*)(channel + 0xC0) & 0x10)
                     //printf("[NETWORKING] Replication time!\n");
-                    *(uint8_t*)(channel + 0xC0) |= 0x10;
+                    //*(uint8_t*)(channel + 0xC0) |= 0x10;
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
-                    actor->NetTag++;
-                    *(uint8_t*)(channel + 0xC0) &= ~0x10;
-                }
-                else {
-                    actor->bForceNetUpdate = true;
+                    if(actor)
+                        actor->NetTag++;
+
+                    //if(channel)
+                        //*(uint8_t*)(channel + 0xC0) &= ~0x10;
                 }
             }
         }
