@@ -17,6 +17,8 @@ namespace Globals {
     UTcpNetDriver* netDriver = 0x0;
 
     std::vector<UNetConnection*> connections = std::vector<UNetConnection*>();
+
+    float tickrate = 30.0f;
 }
 
 namespace SDKUtils {
@@ -74,9 +76,6 @@ namespace EngineLogic {
 
         return reinterpret_cast<void* (*)(unsigned int param_1, size_t param_2, size_t param_3, size_t param_4, size_t param_5, unsigned int param_6, unsigned int param_7, const char* param_8, unsigned int param_9, const char* param_10)>(Globals::baseAddress + 0x0d2e160)(*(int*)(param_1 + 0x10), 0, size, 0x8, 0, 0, 0x31c0019,
             "t:\\POPLAR-PATCH-PC\\Development\\Src\\Core\\Src\\gbxmem.cpp", 0x46, "appMalloc");
-        /*  lVar1 = FUN_140d33260();
-      FUN_140d2e160(*(undefined4 *)(lVar1 + 0x10),0,param_2,0x10,0,0,0x31c0019,
-                    "t:\\POPLAR-PATCH-PC\\Development\\Src\\Core\\Src\\gbxmem.cpp",0x46,"appMalloc");*/
     }
 }
 
@@ -111,8 +110,31 @@ namespace ServerNetworking {
         printf("[NETWORKING] Game networking listening on port %i!\n", Settings::gamePort);
     }
 
-    std::vector<AActor*> GetAllActors() {
-        return SDKUtils::GetAllOfClass<AActor>(); // TODO: Flags instead of this abomination
+    std::vector<AActor*> BuildConsiderList(AWorldInfo* WorldInfo, UNetDriver* NetDriver) {
+        std::vector<AActor*> considerListFirstPass = SDKUtils::GetAllOfClass<AActor>();
+
+        std::vector<AActor*> ret = std::vector<AActor*>();
+
+        for (AActor* actor : considerListFirstPass) {
+            if (!actor)
+                continue;
+
+            if (actor->RemoteRole == ENetRole::ROLE_None)
+                continue;
+
+            if (!actor->WorldInfo)
+                continue;
+
+            actor->NetUpdateTime = WorldInfo->TimeSeconds;
+
+            actor->LastNetUpdateTime = NetDriver->Time;
+
+            if (actor->bAlwaysRelevant || actor->bPendingNetUpdate || actor->bForceNetUpdate || WorldInfo->TimeSeconds > actor->NetUpdateTime) {
+                ret.push_back(actor);
+            }
+        }
+
+        return ret;
     }
 
     uint8_t GetConnectionState(UNetConnection* connection) {
@@ -132,24 +154,21 @@ namespace ServerNetworking {
     }
 
     void TickNetServer(UTcpNetDriver* NetDriver) {
-        std::vector<AActor*> actors = GetAllActors();
+        static AWorldInfo* worldInfo = nullptr;
+
+        if (!worldInfo)
+            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Wishbone_P.TheWorld.PersistentLevel.WorldInfo");
+
+        std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
         for (UNetConnection* connection : Globals::connections) {
+            if (!connection)
+                continue;
+
             if (GetConnectionState(connection) != 3)
                 continue;
 
-            int actorIDX = 0;
-
             for (AActor* actor : actors) {
-                if (!actor)
-                    continue;
-
-                if (!actor->WorldInfo && !actor->IsA<AWorldInfo>())
-                    continue;
-
-                if (actor->RemoteRole == ENetRole::ROLE_None)
-                    continue;
-
                 (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
 
                 /*
@@ -161,15 +180,12 @@ namespace ServerNetworking {
                     continue;
                 }
                 else if (actor->IsA<APlayerController>()) {
-                    //reinterpret_cast<APlayerController*>(actor)->LongClientAdjustPosition();
                     reinterpret_cast<APlayerController*>(actor)->eventSendClientAdjustment();
                 }
 
                 //printf("[NETWORKING] Starting the replication run for %s\n", actor->GetFullName().c_str());
 
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
-
-                
 
                 if (!channel) {
                     //printf("[NETWORKING] No channel, creating...\n");
@@ -198,8 +214,6 @@ namespace ServerNetworking {
 namespace ClientNetworking {
     void JoinServer() {
         EngineLogic::ExecConsoleCommand(L"open 127.0.0.1:6969");
-
-        Sleep(5 * 1000);
     }
 }
 
@@ -265,7 +279,15 @@ namespace Hooks{
         GameEngineTick.call<void>(engine, DeltaTime);
 
         if (Globals::netDriver) {
-            ServerNetworking::TickNetServer(Globals::netDriver);
+            static float time = 0.0;
+
+            time += DeltaTime;
+
+            if (time > (1.0f / Globals::tickrate)) {
+                time = 0.0f;
+
+                ServerNetworking::TickNetServer(Globals::netDriver);
+            }
         }
     }
 
@@ -373,7 +395,7 @@ void MainThread() {
             listening = true;
             EngineLogic::ExecConsoleCommand(L"open Wishbone_P");
 
-            Sleep(10 * 1000);
+            Sleep(7 * 1000);
 
             ServerNetworking::InitListen();
 
