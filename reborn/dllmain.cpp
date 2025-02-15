@@ -110,30 +110,29 @@ namespace ServerNetworking {
         printf("[NETWORKING] Game networking listening on port %i!\n", Settings::gamePort);
     }
 
+    UActorChannel* GetActorChannelForActor(AActor* actor, UNetConnection* connection) {
+        for (UChannel* channel : connection->Channels) {
+            if (channel) {
+                if (channel->IsA<UActorChannel>() && ((UActorChannel*)channel)->Actor == actor) {
+                    return (UActorChannel*)channel;
+                }
+            }
+        }
+
+        return nullptr;
+    }
+
     std::vector<AActor*> BuildConsiderList(AWorldInfo* WorldInfo, UNetDriver* NetDriver) {
         std::vector<AActor*> considerListFirstPass = SDKUtils::GetAllOfClass<AActor>();
 
         std::vector<AActor*> ret = std::vector<AActor*>();
 
         for (AActor* actor : considerListFirstPass) {
-            if (!actor)
+            if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete) {
                 continue;
-
-            if (actor->RemoteRole == ENetRole::ROLE_None)
-                continue;
-
-            if (!actor->WorldInfo)
-                continue;
-
-            if (actor->bAlwaysRelevant || actor->bPendingNetUpdate || actor->bForceNetUpdate || WorldInfo->TimeSeconds > actor->NetUpdateTime) {
-                actor->NetUpdateTime = WorldInfo->TimeSeconds;
-
-                actor->LastNetUpdateTime = NetDriver->Time;
-
-                actor->bPendingNetUpdate = false;
-
-                actor->bForceNetUpdate = false;
-
+            }
+            else if(!((actor->bNetTemporary || actor->bNetInitial) && !actor->bNetInitial)) {
+                actor->bNetInitial = false;
                 ret.push_back(actor);
             }
         }
@@ -143,18 +142,6 @@ namespace ServerNetworking {
 
     uint8_t GetConnectionState(UNetConnection* connection) {
         return *(uint8_t*)((__int64)connection + 0x98);
-    }
-
-    UActorChannel* GetActorChannelForActor(AActor* actor, UNetConnection* connection) {
-        for (UChannel* channel : connection->Channels) {
-            if (channel && !channel->Closing) {
-                if (channel->IsA<UActorChannel>() && ((UActorChannel*)channel)->Actor == actor) {
-                    return (UActorChannel*)channel;
-                }
-            }
-        }
-
-        return nullptr;
     }
 
     void TickNetServer(UTcpNetDriver* NetDriver) {
@@ -175,18 +162,12 @@ namespace ServerNetworking {
             for (AActor* actor : actors) {
                 (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
 
-                /*
-                if (actor->bNetTemporary || actor->bTearOff)
-                    continue;
-                    */
-
                 if (actor->IsA<APlayerController>() && (connection->Actor != actor)) {
                     continue;
                 }
                 else if (actor->IsA<APlayerController>()) {
                     reinterpret_cast<APlayerController*>(actor)->eventSendClientAdjustment();
                 }
-
                 //printf("[NETWORKING] Starting the replication run for %s\n", actor->GetFullName().c_str());
 
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
@@ -202,13 +183,15 @@ namespace ServerNetworking {
                     }
                 }
 
-
-                if (channel && !(*(uint8_t*)(channel + 0xC0) & 0x10)) {
+                if (channel && actor && channel->NumOutRec < 0xFE && !(*(uint8_t*)(channel + 0xC0) & 0x10)) {
                     //printf("[NETWORKING] Replication time!\n");
                     *(uint8_t*)(channel + 0xC0) |= 0x10;
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
                     actor->NetTag++;
                     *(uint8_t*)(channel + 0xC0) &= ~0x10;
+                }
+                else {
+                    actor->bForceNetUpdate = true;
                 }
             }
         }
@@ -394,6 +377,18 @@ void MainThread() {
     bool connected = false;
 
     while (true) {
+        if (GetAsyncKeyState(VK_F5)) {
+            /*
+            for (APoplarPlayerReplicationInfo* pri : SDKUtils::GetAllOfClass<APoplarPlayerReplicationInfo>()) {
+                pri->InitializeAugmentations(SDKUtils::GetLastOfClass< UPoplarPlayerClassDefinition>()->AugSet);
+            }
+            */
+
+            while (GetAsyncKeyState(VK_F5)) {
+
+            }
+        }
+
         if (GetAsyncKeyState(VK_F6)) {
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
