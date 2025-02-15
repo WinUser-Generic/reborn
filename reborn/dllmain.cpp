@@ -166,6 +166,7 @@ namespace ServerNetworking {
                 else if (actor->IsA<APlayerController>()) {
                     reinterpret_cast<APlayerController*>(actor)->eventSendClientAdjustment();
                 }
+
                 //printf("[NETWORKING] Starting the replication run for %s\n", actor->GetFullName().c_str());
 
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
@@ -181,15 +182,11 @@ namespace ServerNetworking {
                     }
                 }
 
-                if (channel && actor && channel->NumOutRec < 0xFE) { //&& !(*(uint8_t*)(channel + 0xC0) & 0x10)
+                if (channel && actor && channel->NumOutRec < 0xFE) {
                     //printf("[NETWORKING] Replication time!\n");
-                    //*(uint8_t*)(channel + 0xC0) |= 0x10;
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
                     if(actor)
                         actor->NetTag++;
-
-                    //if(channel)
-                        //*(uint8_t*)(channel + 0xC0) &= ~0x10;
                 }
             }
         }
@@ -390,7 +387,7 @@ void MainThread() {
         if (GetAsyncKeyState(VK_F6)) {
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
-            EngineLogic::ExecConsoleCommand(L"open Wishbone_P");
+            EngineLogic::ExecConsoleCommand(L"open Wishbone_P?bTournamentMode=1");
 
             Sleep(7 * 1000);
 
