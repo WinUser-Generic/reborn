@@ -125,11 +125,15 @@ namespace ServerNetworking {
             if (!actor->WorldInfo)
                 continue;
 
-            actor->NetUpdateTime = WorldInfo->TimeSeconds;
-
-            actor->LastNetUpdateTime = NetDriver->Time;
-
             if (actor->bAlwaysRelevant || actor->bPendingNetUpdate || actor->bForceNetUpdate || WorldInfo->TimeSeconds > actor->NetUpdateTime) {
+                actor->NetUpdateTime = WorldInfo->TimeSeconds;
+
+                actor->LastNetUpdateTime = NetDriver->Time;
+
+                actor->bPendingNetUpdate = false;
+
+                actor->bForceNetUpdate = false;
+
                 ret.push_back(actor);
             }
         }
