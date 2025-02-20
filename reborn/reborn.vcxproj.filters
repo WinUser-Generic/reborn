@@ -56,5 +56,11 @@
     <ClCompile Include="safetyhook.cpp">
       <Filter>Safetyhook</Filter>
     </ClCompile>
+    <ClCompile Include="BB\SDK_HEADERS\GFxUI_classes.cpp">
+      <Filter>SDK</Filter>
+    </ClCompile>
+    <ClCompile Include="BB\SDK_HEADERS\GearboxFramework_classes.cpp">
+      <Filter>SDK</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

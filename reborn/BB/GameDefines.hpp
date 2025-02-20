@@ -375,9 +375,22 @@ public:
 	}
 
 private:
+	void* EngineMalloc(size_t size) {
+		static size_t baseAddress = 0x0;
+		
+		if(!baseAddress)
+			baseAddress = (size_t)GetModuleHandleA("Battleborn.exe");
+
+		int* param_1 = reinterpret_cast<int* (*)()>(baseAddress + 0x0d33260)();
+
+		return reinterpret_cast<void* (*)(unsigned int param_1, size_t param_2, size_t param_3, size_t param_4, size_t param_5, unsigned int param_6, unsigned int param_7, const char* param_8, unsigned int param_9, const char* param_10)>(baseAddress + 0x0d2e160)(*(int*)(param_1 + 0x10), 0, size, 0x8, 0, 0, 0x31c0019,
+			"t:\\POPLAR-PATCH-PC\\Development\\Src\\Core\\Src\\gbxmem.cpp", 0x46, "appMalloc");
+	}
+
 	void ReAllocate(int32_t newArrayMax)
 	{
-		ElementPointer newArrayData = (ElementPointer)::operator new(newArrayMax * sizeof(ElementType));
+		ElementPointer newArrayData = (ElementPointer)EngineMalloc(newArrayMax * sizeof(ElementType));
+		//ElementPointer newArrayData = (ElementPointer)::operator new(newArrayMax * sizeof(ElementType));
 		int32_t newNum = ArrayCount;
 
 		if (newArrayMax < newNum)
@@ -385,17 +398,20 @@ private:
 			newNum = newArrayMax;
 		}
 
+		memcpy_s(newArrayData, newArrayMax, ArrayData, ArrayMax);
+
 		for (int32_t i = 0; i < newNum; i++)
 		{
-			new(newArrayData + i) ElementType(std::move(ArrayData[i]));
+			//(ElementType)EngineMalloc(newArrayData + i);
+			//new(newArrayData + i) ElementType(std::move(ArrayData[i]));
 		}
 
 		for (int32_t i = 0; i < ArrayCount; i++)
 		{
-			ArrayData[i].~ElementType();
+			//ArrayData[i].~ElementType();
 		}
 
-		::operator delete(ArrayData, ArrayMax * sizeof(ElementType));
+		//::operator delete(ArrayData, ArrayMax * sizeof(ElementType));
 		ArrayData = newArrayData;
 		ArrayMax = newArrayMax;
 	}
@@ -755,7 +771,7 @@ public:
 class FString
 {
 public:
-	using ElementType = const char;
+	using ElementType = const wchar_t;
 	using ElementPointer = ElementType*;
 
 public:
@@ -770,12 +786,36 @@ public:
 
 	~FString() {}
 
+private:
+	void* EngineMalloc(size_t size) {
+		static size_t baseAddress = 0x0;
+
+		if (!baseAddress)
+			baseAddress = (size_t)GetModuleHandleA("Battleborn.exe");
+
+		int* param_1 = reinterpret_cast<int* (*)()>(baseAddress + 0x0d33260)();
+
+		return reinterpret_cast<void* (*)(unsigned int param_1, size_t param_2, size_t param_3, size_t param_4, size_t param_5, unsigned int param_6, unsigned int param_7, const char* param_8, unsigned int param_9, const char* param_10)>(baseAddress + 0x0d2e160)(*(int*)(param_1 + 0x10), 0, size, 0x8, 0, 0, 0x31c0019,
+			"t:\\POPLAR-PATCH-PC\\Development\\Src\\Core\\Src\\gbxmem.cpp", 0x46, "appMalloc");
+	}
+
 public:
 	FString& assign(ElementPointer other)
 	{
-		ArrayCount = (other ? (strlen(other) + 1) : 0);
+		ArrayCount = (other ? (wcslen(other) + 1) : 0);
+		ArrayMax = ArrayCount;
+		if (other) {
+			ArrayData = (ElementPointer)EngineMalloc((wcslen(other) + 1)); // IF WE CRASH ON ALLOC LOOK HERE
+			memcpy_s((void*)ArrayData, (wcslen(other) + 1), other, (wcslen(other) + 1));
+		}
+		else {
+			ArrayData = nullptr;
+		}
+		/*
+		ArrayCount = (other ? (wcslen(other) + 1) : 0);
 		ArrayMax = ArrayCount;
 		ArrayData = (ArrayCount > 0 ? other : nullptr);
+		*/
 		return *this;
 	}
 
@@ -828,12 +868,12 @@ public:
 
 	bool operator==(const FString& other)
 	{
-		return (!strcmp(ArrayData, other.ArrayData));
+		return (!wcscmp(ArrayData, other.ArrayData));
 	}
 
 	bool operator!=(const FString& other)
 	{
-		return (strcmp(ArrayData, other.ArrayData));
+		return (wcscmp(ArrayData, other.ArrayData));
 	}
 };
 

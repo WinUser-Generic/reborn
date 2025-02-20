@@ -18,6 +18,8 @@ namespace Globals {
 
     std::vector<UNetConnection*> connections = std::vector<UNetConnection*>();
 
+    std::vector<std::pair<UNetConnection*, std::vector<AActor*>>> sentTemporaries = std::vector<std::pair<UNetConnection*, std::vector<AActor*>>>();
+
     float tickrate = 30.0f;
 }
 
@@ -95,7 +97,7 @@ namespace ServerNetworking {
 
         furl.Port = Settings::gamePort;
 
-        FString error = FString((const char*)L"");
+        FString error = FString(L"");
 
         printf("[NETWORKING] Normal init status %i\n", reinterpret_cast<char (*)(UNetDriver * NetDriver, size_t world, FURL & url, FString & error)>(Globals::baseAddress + 0x0c21e30)(NetDriver, (__int64)theWorld + 0x58, furl, error));
 
@@ -129,8 +131,7 @@ namespace ServerNetworking {
             if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete) {
                 continue;
             }
-            else if(!((actor->bNetTemporary || actor->bNetInitial) && !actor->bNetInitial)) {
-                actor->bNetInitial = false;
+            else {
                 ret.push_back(actor);
             }
         }
@@ -157,14 +158,38 @@ namespace ServerNetworking {
             if (GetConnectionState(connection) != 3)
                 continue;
 
+            if (connection->Actor->PendingAdjustment.TimeStamp > 0.0)
+                connection->Actor->eventSendClientAdjustment();
+
             for (AActor* actor : actors) {
                 (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
 
                 if (actor->IsA<APlayerController>() && (connection->Actor != actor)) {
                     continue;
                 }
-                else if (actor->IsA<APlayerController>()) {
-                    reinterpret_cast<APlayerController*>(actor)->eventSendClientAdjustment();
+
+                if (actor->bNetTemporary) {
+                    bool shouldContinue = false;
+
+                    for (auto pair : Globals::sentTemporaries) {
+                        if (pair.first == connection) {
+                            for (AActor* cmpActor : pair.second) {
+                                if (actor == cmpActor) {
+                                    shouldContinue = true;
+                                    break;
+                                }
+                            }
+
+                            if (!shouldContinue) {
+                                pair.second.push_back(actor);
+                            }
+
+                            break;
+                        }
+                    }
+
+                    if (shouldContinue)
+                        continue;
                 }
 
                 //printf("[NETWORKING] Starting the replication run for %s\n", actor->GetFullName().c_str());
@@ -182,11 +207,18 @@ namespace ServerNetworking {
                     }
                 }
 
-                if (channel && actor && channel->NumOutRec < 0xFE) {
+                if (channel && channel->Actor && channel->NumOutRec < 0xFE) {
                     //printf("[NETWORKING] Replication time!\n");
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
-                    if(actor)
-                        actor->NetTag++;
+                    if (channel->Actor) {
+                        channel->Actor->NetTag++;
+
+                        //if(actor->bNetTemporary)
+                            //(*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)channel + 0x210)))(channel); // Close channel
+                    }
+                }
+                else if (channel && (!channel->Actor || channel->Actor->bPendingDelete)) {
+                    (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)channel + 0x210)))(channel);
                 }
             }
         }
@@ -249,6 +281,7 @@ namespace Hooks{
             pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
 
             Globals::connections.push_back(connection);
+            Globals::sentTemporaries.push_back(std::pair<UNetConnection*, std::vector<AActor*>>(connection, std::vector<AActor*>()));
         }
         else if (message == 0xf) {
             printf("[NETWORKING] New player ack'd!\n");
@@ -282,7 +315,8 @@ namespace Hooks{
     SafetyHookInline ProcessEvent;
 
     void StartupCompletedHook() {
-        SDKUtils::GetLastOfClass< UPoplarPressStartGFxMovie>()->ContinueToMenu();
+        SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
+        SDKUtils::GetLastOfClass<UPoplarPressStartGFxMovie>()->ContinueToMenu();
     }
 
     void MainPanelClickedHook(uint32_t PanelId) {
@@ -292,6 +326,11 @@ namespace Hooks{
     }
 
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
+        //if(function->GetFullName().contains("MetaData") || function->GetFullName().contains("metaData") || function->GetFullName().contains("metadata"))
+        //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+
+        //Function PoplarGame.PoplarMetagameInventory.OnReceivePlayerMetaDataFromHydra
+
         static UFunction* startupCompleteUFunction = nullptr;
 
         if (!startupCompleteUFunction)
@@ -334,6 +373,22 @@ namespace Hooks{
 
         return ProcessEvent.call<void>(object, function, params);
     }
+
+    SafetyHookInline DestroyActor;
+
+    bool DestroyActorHook(UWorld* world, AActor* actor, bool force) {
+        if (Globals::netDriver) {
+            for (UNetConnection* connection : Globals::connections) {
+                UActorChannel* ch = ServerNetworking::GetActorChannelForActor(actor, connection);
+
+                if (ch) {
+                    (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
+                }
+            }
+        }
+
+        return DestroyActor.call<bool>(world, actor, force);
+    }
 }
 
 namespace Init {
@@ -360,6 +415,7 @@ namespace Init {
         Hooks::GameEngineTick = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0207e10), &Hooks::GameEngineTickHook);
         Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
         Hooks::ProcessRemoteFunction = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0728fd0), &Hooks::ProcessRemoteFunctionHook);
+        Hooks::DestroyActor = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3EF070), &Hooks::DestroyActorHook);
     }
 }
 
@@ -378,6 +434,200 @@ void MainThread() {
                 pri->InitializeAugmentations(SDKUtils::GetLastOfClass< UPoplarPlayerClassDefinition>()->AugSet);
             }
             */
+            /*
+            for (UPoplarFrontendGFxMovie* test : SDKUtils::GetAllOfClass<UPoplarFrontendGFxMovie>()) {
+                //std::cout << test->GetFullName() << std::endl;
+                FMessageOfTheDay msg = FMessageOfTheDay();
+                FNewsArticle article = FNewsArticle();
+                article.LearnMoreURL = (const char*)L"https://google.com";
+                article.Summary = (const char*)L"Reborn 1.0";
+                article.Header = (const char*)L"Reborn 1.0";
+                article.Body = (const char*)L"Reborn 1.0 has been almost a year in the making, and no part of Reborn is untouched!\nSave Solus with your friends, battle to the death with your enemies, or just collect shiny gear; the choice is yours!";
+                msg.Article = article;
+                msg.DisplayTime = 0;
+                msg.MessageId = 0x69;
+                msg.bForceFullscreen = true;
+                test->MessagesOfTheDay.push_back(msg);
+                test->CurrentMessageOfTheDayId = 0x69;
+                test->TimedShowNextMessageOfTheDay();
+
+                //test->LastCharacterPlayedAs = UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>("PoplarPlayerNameIdentifierDefinition GD_RocketHawk.NameId_RocketHawk");
+                //test->LastCharacterSkinPlayedIn = UObject::FindObject<UPoplarMetaSkinDefinition>("PoplarMetaSkinDefinition GD_RocketHawk.Skins.SkinId_Color005");
+            }
+            */
+
+            /*
+            FPlayerMetaData serverMeta = FPlayerMetaData();
+
+            serverMeta.MetaLevel = 69;
+            serverMeta.MetaExperience = 50;
+            serverMeta.PlayerID = SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId();
+            serverMeta.MetaLevelProgression = 69;
+            serverMeta.MetaXPRequiredForNextLevel = 50;
+
+            FSparkResult res = FSparkResult();
+
+            res.bRequestSucceeded = true;
+
+            SDKUtils::GetLastOfClass < UPoplarOnlineClientPlayerService >()->CachedPlayerMetaData.push_back(serverMeta);
+            SDKUtils::GetLastOfClass < UPoplarOnlineClientPlayerService >()->ReadPlayerMetaDataRequestComplete(res);
+
+            FPlayerDisplayData displayData = FPlayerDisplayData();
+
+            displayData.bIsValid = true;
+            displayData.UniqueId = SDKUtils::GetLastOfClass<APoplarPlayerController>()->PlayerReplicationInfo->UniqueId;
+            displayData.MetaLevel = 69;
+            displayData.XP = 50;
+
+            SDKUtils::GetLastOfClass < UPoplarOnlineClientPlayerService >()->CachedPlayerDisplayData.push_back(displayData);
+            SDKUtils::GetLastOfClass < UPoplarOnlineClientPlayerService >()->OnReadPlayerDisplayData(SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId(), 0, SDKUtils::GetLastOfClass < UPoplarOnlineClientPlayerService >()->CachedPlayerDisplayData);
+
+            SDKUtils::GetLastOfClass< UPoplarCommandMenuDefinition>()->MinCommandRankForGear = 0;
+
+            SDKUtils::ListAllOfClass< UPoplarCommandArtifactsGFxMovie>();
+            */
+            /*
+            SDKUtils::GetLastOfClass< UPoplarCommandMenuDefinition>()->MinCommandRankForGear = 0;
+            FPlayerMetaData serverMeta = FPlayerMetaData();
+
+            serverMeta.MetaLevel = 69;
+            serverMeta.MetaExperience = 50;
+            serverMeta.PlayerID = SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId();
+            serverMeta.MetaLevelProgression = 69;
+            serverMeta.MetaXPRequiredForNextLevel = 50;
+
+            FSparkResult res = FSparkResult();
+
+            res.bRequestSucceeded = true;
+
+            SDKUtils::GetLastOfClass < UPoplarOnlineClientPlayerService >()->CachedPlayerMetaData.push_back(serverMeta);
+            */
+
+            /*
+            UPoplarMetagameInventory* cached = SDKUtils::GetLastOfClass< UPoplarMetagameInventory>();
+
+            FPlatformUserId id = SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId();
+
+            FPlayerTransactions trans = FPlayerTransactions();
+            trans.PlayerID = id;
+            trans.PageNumber = 0;
+            trans.TotalPages = 1;
+            trans.Transactions = TArray<FPlayerTransaction>();
+
+            FPlayerEntitlementData entitle = FPlayerEntitlementData();
+
+            entitle.EarnedCurrency = 69;
+            entitle.EarnedCurrencyRate = 0;
+            entitle.PerkBankMaxSize = 9999;
+            entitle.PlayerID = id;
+            entitle.RefundTokens = 0;
+            entitle.ReputationPoints = 420;
+            entitle.Entitlements = TArray<FMetaItem>();
+
+            int i = 0;
+
+            for (UPoplarPerkFunction* perk : SDKUtils::GetAllOfClass<UPoplarPerkFunction>()) {
+                if (perk->GetFullName().contains("Default")) {
+                    continue;
+                }
+
+                if (i > 1)
+                    continue;
+
+                i++;
+
+                FMetaItem item = FMetaItem();
+
+                std::wstring str = std::to_wstring(perk->HydraDatabaseID);
+
+                item.HydraID = str.c_str();
+                item.ItemLevel = 1;
+                item.AcquisitionTime = FString();
+                item.bCanUse = true;
+                item.bMetagameBreadcrumb = 0;
+                item.Count = 1;
+                item.EarnedCurrencySellValue = 0;
+                item.JSON = FString();
+                item.MetaID = item.MetaID;
+                item.PlatformID = FString();
+                item.PremiumCurrencySellValue = 0;
+                item.Source = 0;
+                item.Type = 0;
+
+                entitle.Entitlements.push_back(item);
+            }
+            
+
+            cached->OnReceivePlayerEntitlementDataFromHydra(id, 0);
+            */
+            //cached->OnTransactionRefunded(id, 0, trans, entitle);
+            /*
+            UPoplarCommandArtifactsGFxMovie* cachedLOL = SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>();
+
+            std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
+            
+            static int i = 0;
+
+            for (UPoplarPerkFunction* perk : SDKUtils::GetAllOfClass<UPoplarPerkFunction>()) {
+                if (perk->GetFullName().contains("Default")) {
+                    continue;
+                }
+                
+                i++;
+
+                FReplicatedPerkItem* item = (FReplicatedPerkItem*)EngineLogic::EngineMalloc(sizeof(FReplicatedPerkItem));
+
+                item->PerkFunction = perk;
+                item->ItemLevel = 1;
+                item->Rarity = 1;
+                item->bActive = true;
+                item->bCanUse = true;
+                item->PlayerID = FUniqueNetId();
+                item->ApolloJSON = L"{}";
+                item->EntitlementIndex = i;
+                item->MetaID = perk->MetaContentID;
+                item->AssetKey = perk->AssetTrackerKey;
+                item->ItemData = FPointer();
+                item->ItemData.Dummy = 0x0;
+
+                cachedLOL->PerkBank.push_back(*item);
+            } 
+
+            std::cout << i << std::endl;
+
+            std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
+
+            std::cout << "Control passed back to game" << std::endl;
+
+            cachedLOL->bBankNeedsMetagameUpdate = false;
+            cachedLOL->SelectedBankPerkIndex = 0;
+            //cachedLOL->MaxPopulatingBankPerkIndex = SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size();
+            */
+/*
+            UPoplarCommandBattlebornGFxMovie* commandMovie = SDKUtils::GetLastOfClass< UPoplarCommandBattlebornGFxMovie>();
+
+            for (UPoplarPlayerNameIdentifierDefinition* character : SDKUtils::GetAllOfClass< UPoplarPlayerNameIdentifierDefinition>()) {
+                if (character->GetFullName().contains("Default"))
+                    continue;
+
+                FPoplarCharacterDetails details = FPoplarCharacterDetails();
+                details.bChallengeRequirementMet = true;
+                details.BreadcrumbCount = 0;
+                details.ChallengeUnlockDescription = FString();
+                details.Character = character;
+                details.CharacterIconMoviePath = UObject::PathName(character->CharacterMetaMarketplaceIconGFxMovie);
+                details.CharacterLevel = 1;
+                details.CharacterLevelExperiencePercentage = 50.0;
+                details.FactionIconPath = FString();
+                details.LoreChallengesCompleted = 0;
+                details.ScheduledCommandRank = 0;
+                details.SortOrder = 0;
+                commandMovie->SelectableCharacters.push_back(details);
+            }
+            
+
+            std::cout << commandMovie->CharacterCells->GetFullName() << std::endl;
+            */
 
             while (GetAsyncKeyState(VK_F5)) {
 
@@ -387,7 +637,7 @@ void MainThread() {
         if (GetAsyncKeyState(VK_F6)) {
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
-            EngineLogic::ExecConsoleCommand(L"open Wishbone_P?bTournamentMode=1");
+            EngineLogic::ExecConsoleCommand(L"open Wishbone_P");
 
             Sleep(7 * 1000);
 
@@ -404,6 +654,17 @@ void MainThread() {
             ClientNetworking::JoinServer();
 
             while (GetAsyncKeyState(VK_F7)) {
+
+            }
+        }
+
+        if (GetAsyncKeyState(VK_F8)) {
+            APoplarPlayerController* pc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
+
+            if(pc && pc->MyPoplarPRI && pc->MyPoplarPawn)
+                pc->MyPoplarPRI->InitializeAugmentations(pc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+            while (GetAsyncKeyState(VK_F8)) {
 
             }
         }

@@ -148,6 +148,8 @@
     <ClCompile Include="BB\GameDefines.cpp" />
     <ClCompile Include="BB\SDK_HEADERS\Core_classes.cpp" />
     <ClCompile Include="BB\SDK_HEADERS\Engine_classes.cpp" />
+    <ClCompile Include="BB\SDK_HEADERS\GearboxFramework_classes.cpp" />
+    <ClCompile Include="BB\SDK_HEADERS\GFxUI_classes.cpp" />
     <ClCompile Include="BB\SDK_HEADERS\PoplarGame_classes.cpp" />
     <ClCompile Include="BB\SDK_HEADERS\WillowGame_classes.cpp" />
     <ClCompile Include="dllmain.cpp" />
