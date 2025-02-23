@@ -91,7 +91,7 @@ namespace ServerNetworking {
 
         theWorld->NetDriver = NetDriver;
 
-        UObject::FindObject<AWorldInfo>("WorldInfo Wishbone_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
+        UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
 
         FURL furl = FURL();
 
@@ -147,7 +147,7 @@ namespace ServerNetworking {
         static AWorldInfo* worldInfo = nullptr;
 
         if (!worldInfo)
-            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Wishbone_P.TheWorld.PersistentLevel.WorldInfo");
+            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo");
 
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
@@ -157,11 +157,15 @@ namespace ServerNetworking {
 
             if (GetConnectionState(connection) != 3)
                 continue;
-
-            if (connection->Actor->PendingAdjustment.TimeStamp > 0.0)
+                
+            if (connection->Actor->PendingAdjustment.TimeStamp > 0.0) {
                 connection->Actor->eventSendClientAdjustment();
+            }
 
             for (AActor* actor : actors) {
+                if (!actor)
+                    continue;
+
                 (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
 
                 if (actor->IsA<APlayerController>() && (connection->Actor != actor)) {
@@ -196,7 +200,7 @@ namespace ServerNetworking {
 
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
 
-                if (!channel) {
+                if (!channel && actor) {
                     //printf("[NETWORKING] No channel, creating...\n");
 
                     channel = reinterpret_cast<UActorChannel * (__thiscall*)(UNetConnection * connection, int channelType, uint32_t openedLocally, int chIndex)>(Globals::baseAddress + 0x061daa0)(connection, 2, 1, -1);
@@ -227,7 +231,7 @@ namespace ServerNetworking {
 
 namespace ClientNetworking {
     void JoinServer() {
-        EngineLogic::ExecConsoleCommand(L"open 127.0.0.1:6969");
+        EngineLogic::ExecConsoleCommand(L"open 174.55.86.128:6969");
     }
 }
 
@@ -236,7 +240,7 @@ namespace Hooks{
 
     bool ProcessRemoteFunctionHook(AActor* actor, UFunction* function, void* params, void* stack) {
         if (!actor->WorldInfo) {
-            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Wishbone_P.TheWorld.PersistentLevel.WorldInfo");
+            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo");
         }
 
         bool ret = ProcessRemoteFunction.call<bool>(actor, function, params, stack);
@@ -245,6 +249,13 @@ namespace Hooks{
     }
 
     SafetyHookInline WorldControlMessage;
+
+    static std::vector<SafetyHookVmt> vmts = std::vector<SafetyHookVmt>();
+    static std::vector<SafetyHookVm> vms = std::vector<SafetyHookVm>();
+
+    bool IsNetReady(UNetConnection* connection, int saturate) {
+        return 1;
+    }
 
     void WorldControlMessageHook(UWorld* world, UNetConnection* connection, uint8_t message, void* inbunch) {
         WorldControlMessage.call<void>(world, connection, message, inbunch);
@@ -257,7 +268,7 @@ namespace Hooks{
         else if (message == 0x9) {
             printf("[NETWORKING] Spawning a new player!\n");
 
-            UWorld* theWorld = UObject::FindObject<UWorld>("World Wishbone_P.TheWorld");
+            UWorld* theWorld = UObject::FindObject<UWorld>("World Caverns_P.TheWorld");
             FURL theURL = FURL();
 
             FUniqueNetId netID = FUniqueNetId();
@@ -280,8 +291,14 @@ namespace Hooks{
 
             pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
 
+            SDKUtils::GetLastOfClass<AGameInfo>()->eventPostLogin(pc);
+
             Globals::connections.push_back(connection);
             Globals::sentTemporaries.push_back(std::pair<UNetConnection*, std::vector<AActor*>>(connection, std::vector<AActor*>()));
+
+            vmts.push_back(safetyhook::create_vmt(connection));
+
+            vms.push_back(safetyhook::create_vm(vmts.back(), 0x260 / 0x8, IsNetReady));
         }
         else if (message == 0xf) {
             printf("[NETWORKING] New player ack'd!\n");
@@ -326,8 +343,27 @@ namespace Hooks{
     }
 
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
-        //if(function->GetFullName().contains("MetaData") || function->GetFullName().contains("metaData") || function->GetFullName().contains("metadata"))
-        //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        //if (function->GetFullName().contains("AdjustPosition")) {
+            //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        //}
+        /*
+
+        if (function == veryShortClientAdjustPosition) {
+            APlayerController_execVeryShortClientAdjustPosition_Params* parms = reinterpret_cast<APlayerController_execVeryShortClientAdjustPosition_Params*>(params);
+
+            APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
+
+            ppc->LongClientAdjustPosition(parms->TimeStamp, FName(1830), EPhysics::PHYS_Walking, parms->NewLocX, parms->NewLocY, parms->NewLocZ, 0, 0, 0, parms->NewBase, ppc->Pawn ? ppc->Pawn->Floor.X : 0, ppc->Pawn ? ppc->Pawn->Floor.Y : 0, ppc->Pawn ? ppc->Pawn->Floor.Z : 0);
+        }
+
+        if (function == clientAdjustPosition) {
+            APlayerController_execClientAdjustPosition_Params* parms = reinterpret_cast<APlayerController_execClientAdjustPosition_Params*>(params);
+
+            APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
+
+            ppc->LongClientAdjustPosition(parms->TimeStamp, parms->NewState, (EPhysics)parms->newPhysics, parms->NewLocX, parms->NewLocY, parms->NewLocZ, parms->NewVelX, parms->NewVelY, parms->NewVelZ, parms->NewBase, ppc->Pawn ? ppc->Pawn->Floor.X : 0, ppc->Pawn ? ppc->Pawn->Floor.Y : 0, ppc->Pawn ? ppc->Pawn->Floor.Z : 0);
+        }
+        */
 
         //Function PoplarGame.PoplarMetagameInventory.OnReceivePlayerMetaDataFromHydra
 
@@ -389,6 +425,12 @@ namespace Hooks{
 
         return DestroyActor.call<bool>(world, actor, force);
     }
+
+    SafetyHookInline JustDoNothing;
+
+    void JustDoNothingHook(void* a1, void* a2, void* a3) {
+        return;
+    }
 }
 
 namespace Init {
@@ -416,6 +458,7 @@ namespace Init {
         Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
         Hooks::ProcessRemoteFunction = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0728fd0), &Hooks::ProcessRemoteFunctionHook);
         Hooks::DestroyActor = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3EF070), &Hooks::DestroyActorHook);
+        //Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x84F370), &Hooks::JustDoNothingHook);
     }
 }
 
@@ -629,19 +672,36 @@ void MainThread() {
             std::cout << commandMovie->CharacterCells->GetFullName() << std::endl;
             */
 
+            for (ULevelStreaming* streaming: SDKUtils::GetAllOfClass< ULevelStreaming>()) {
+                if (!streaming->GetFullName().contains("Default")) {
+                    std::cout << streaming->GetFullName() << std::endl;
+
+                    for (APlayerController* pc : SDKUtils::GetAllOfClass<APlayerController>()) {
+                        if (!pc->GetFullName().contains("Default")) {
+                            std::cout << pc->GetFullName() << std::endl;
+
+                            pc->eventLevelStreamingStatusChanged(streaming, true, true, true);
+                        }
+                    }
+                }
+            }
+
             while (GetAsyncKeyState(VK_F5)) {
 
             }
         }
 
         if (GetAsyncKeyState(VK_F6)) {
+            //
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
-            EngineLogic::ExecConsoleCommand(L"open Wishbone_P");
+            EngineLogic::ExecConsoleCommand(L"open Caverns_P");
 
             Sleep(7 * 1000);
 
             ServerNetworking::InitListen();
+
+            
 
             while (GetAsyncKeyState(VK_F6)) {
 
