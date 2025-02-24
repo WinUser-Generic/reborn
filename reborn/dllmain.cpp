@@ -162,8 +162,14 @@ namespace ServerNetworking {
                 connection->Actor->eventSendClientAdjustment();
             }
 
+            if(!(*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1))
+                continue;
+
             for (AActor* actor : actors) {
                 if (!actor)
+                    continue;
+
+                if (!(*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1))
                     continue;
 
                 (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
@@ -200,18 +206,18 @@ namespace ServerNetworking {
 
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
 
-                if (!channel && actor) {
+                if (!channel && actor && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1)) {
                     //printf("[NETWORKING] No channel, creating...\n");
 
                     channel = reinterpret_cast<UActorChannel * (__thiscall*)(UNetConnection * connection, int channelType, uint32_t openedLocally, int chIndex)>(Globals::baseAddress + 0x061daa0)(connection, 2, 1, -1);
                     
-                    if (channel) {
+                    if (channel && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 0)) {
                         //printf("[NETWORKING] Setting channel actor...\n");
                         reinterpret_cast<void(__thiscall*)(UActorChannel*, AActor*)>(Globals::baseAddress + 0x0611970)(channel, actor);
                     }
                 }
 
-                if (channel && channel->Actor) { //&& channel->NumOutRec < 0xFE
+                if (channel && channel->Actor && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1) && channel->NumOutRec < 0xFE) {
                     //printf("[NETWORKING] Replication time!\n");
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
                     if (channel->Actor) {
@@ -231,7 +237,7 @@ namespace ServerNetworking {
 
 namespace ClientNetworking {
     void JoinServer() {
-        EngineLogic::ExecConsoleCommand(L"open 174.55.86.128:6969");
+        EngineLogic::ExecConsoleCommand(L"open 127.0.0.1:6969"); //
     }
 }
 
@@ -296,9 +302,9 @@ namespace Hooks{
             Globals::connections.push_back(connection);
             Globals::sentTemporaries.push_back(std::pair<UNetConnection*, std::vector<AActor*>>(connection, std::vector<AActor*>()));
 
-            vmts.push_back(safetyhook::create_vmt(connection));
+            //vmts.push_back(safetyhook::create_vmt(connection));
 
-            vms.push_back(safetyhook::create_vm(vmts.back(), 0x260 / 0x8, IsNetReady));
+            //vms.push_back(safetyhook::create_vm(vmts.back(), 0x260 / 0x8, IsNetReady));
         }
         else if (message == 0xf) {
             printf("[NETWORKING] New player ack'd!\n");
@@ -343,9 +349,11 @@ namespace Hooks{
     }
 
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
-        //if (function->GetFullName().contains("AdjustPosition")) {
-            //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
-        //}
+        /*
+        if (function->GetFullName().contains("AdjustPosition")) {
+            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        }
+        */
         /*
 
         if (function == veryShortClientAdjustPosition) {
