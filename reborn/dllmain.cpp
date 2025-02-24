@@ -5,6 +5,7 @@
 #include "safetyhook.hpp"
 #include <iostream>
 #include <format>
+#include <mutex>
 
 namespace Settings {
     int32_t gamePort = 6969;
@@ -23,6 +24,8 @@ namespace Globals {
     float tickrate = 30.0f;
 
     std::vector<UActorChannel*> channelsToClose = std::vector<UActorChannel*>();
+
+    std::mutex mutex;
 }
 
 namespace SDKUtils {
@@ -235,12 +238,16 @@ namespace ServerNetworking {
             }
         }
         
-        while (!Globals::channelsToClose.empty()) {
-            UActorChannel* ch = Globals::channelsToClose.back();
+        {
+            std::lock_guard<std::mutex> lock(Globals::mutex);
 
-            Globals::channelsToClose.pop_back();
+            while (!Globals::channelsToClose.empty()) {
+                UActorChannel* ch = Globals::channelsToClose.back();
 
-            (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
+                Globals::channelsToClose.pop_back();
+
+                (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
+            }
         }
     }
 }
@@ -436,7 +443,11 @@ namespace Hooks{
                 UActorChannel* ch = ServerNetworking::GetActorChannelForActor(actor, connection);
 
                 if (ch) {
-                    Globals::channelsToClose.push_back(ch);
+                    {
+                        std::lock_guard<std::mutex> lock(Globals::mutex);
+
+                        Globals::channelsToClose.push_back(ch);
+                    }
                 }
             }
         }
