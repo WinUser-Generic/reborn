@@ -91,7 +91,7 @@ namespace ServerNetworking {
 
         theWorld->NetDriver = NetDriver;
 
-        UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
+        UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
 
         FURL furl = FURL();
 
@@ -147,7 +147,7 @@ namespace ServerNetworking {
         static AWorldInfo* worldInfo = nullptr;
 
         if (!worldInfo)
-            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo");
+            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo");
 
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
@@ -211,7 +211,7 @@ namespace ServerNetworking {
                     }
                 }
 
-                if (channel && channel->Actor && channel->NumOutRec < 0xFE) {
+                if (channel && channel->Actor) { //&& channel->NumOutRec < 0xFE
                     //printf("[NETWORKING] Replication time!\n");
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
                     if (channel->Actor) {
@@ -240,7 +240,7 @@ namespace Hooks{
 
     bool ProcessRemoteFunctionHook(AActor* actor, UFunction* function, void* params, void* stack) {
         if (!actor->WorldInfo) {
-            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo");
+            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo");
         }
 
         bool ret = ProcessRemoteFunction.call<bool>(actor, function, params, stack);
@@ -268,7 +268,7 @@ namespace Hooks{
         else if (message == 0x9) {
             printf("[NETWORKING] Spawning a new player!\n");
 
-            UWorld* theWorld = UObject::FindObject<UWorld>("World Caverns_P.TheWorld");
+            UWorld* theWorld = UObject::FindObject<UWorld>("World Toby_Raid_P.TheWorld");
             FURL theURL = FURL();
 
             FUniqueNetId netID = FUniqueNetId();
@@ -413,6 +413,7 @@ namespace Hooks{
     SafetyHookInline DestroyActor;
 
     bool DestroyActorHook(UWorld* world, AActor* actor, bool force) {
+        /*
         if (Globals::netDriver) {
             for (UNetConnection* connection : Globals::connections) {
                 UActorChannel* ch = ServerNetworking::GetActorChannelForActor(actor, connection);
@@ -422,6 +423,7 @@ namespace Hooks{
                 }
             }
         }
+        */
 
         return DestroyActor.call<bool>(world, actor, force);
     }
@@ -695,13 +697,11 @@ void MainThread() {
             //
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
-            EngineLogic::ExecConsoleCommand(L"open Caverns_P");
+            EngineLogic::ExecConsoleCommand(L"open Toby_Raid_P");
 
             Sleep(7 * 1000);
 
             ServerNetworking::InitListen();
-
-            
 
             while (GetAsyncKeyState(VK_F6)) {
 
