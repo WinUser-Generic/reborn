@@ -233,7 +233,7 @@ namespace ServerNetworking {
                     }
                 }
                 else if (channel && (!channel->Actor || channel->Actor->bPendingDelete)) {
-                    (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)channel + 0x210)))(channel);
+                    //(*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)channel + 0x210)))(channel);
                 }
             }
         }
@@ -246,7 +246,10 @@ namespace ServerNetworking {
 
                 Globals::channelsToClose.pop_back();
 
-                (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
+                if (ch && ch->Connection) {
+                    std::cout << ch->Connection->MaxPacket << std::endl;
+                    (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
+                }
             }
         }
     }
@@ -457,6 +460,8 @@ namespace Hooks{
 
     SafetyHookInline JustDoNothing;
 
+    SafetyHookInline JustDoNothing2;
+
     void JustDoNothingHook(void* a1, void* a2, void* a3) {
         return;
     }
@@ -487,6 +492,9 @@ namespace Init {
         Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
         Hooks::ProcessRemoteFunction = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0728fd0), &Hooks::ProcessRemoteFunctionHook);
         Hooks::DestroyActor = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3EF070), &Hooks::DestroyActorHook);
+        Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x16EC4D0), &Hooks::JustDoNothingHook);
+        Hooks::JustDoNothing2 = safetyhook::create_inline((void*)(Globals::baseAddress + 0xE5F320), &Hooks::JustDoNothingHook);
+        //E5F320
         //Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x84F370), &Hooks::JustDoNothingHook);
     }
 }
