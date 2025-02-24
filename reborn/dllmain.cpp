@@ -21,6 +21,8 @@ namespace Globals {
     std::vector<std::pair<UNetConnection*, std::vector<AActor*>>> sentTemporaries = std::vector<std::pair<UNetConnection*, std::vector<AActor*>>>();
 
     float tickrate = 30.0f;
+
+    std::vector<UActorChannel*> channelsToClose = std::vector<UActorChannel*>();
 }
 
 namespace SDKUtils {
@@ -91,7 +93,7 @@ namespace ServerNetworking {
 
         theWorld->NetDriver = NetDriver;
 
-        UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
+        UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
 
         FURL furl = FURL();
 
@@ -147,7 +149,7 @@ namespace ServerNetworking {
         static AWorldInfo* worldInfo = nullptr;
 
         if (!worldInfo)
-            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo");
+            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo");
 
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
@@ -211,7 +213,7 @@ namespace ServerNetworking {
 
                     channel = reinterpret_cast<UActorChannel * (__thiscall*)(UNetConnection * connection, int channelType, uint32_t openedLocally, int chIndex)>(Globals::baseAddress + 0x061daa0)(connection, 2, 1, -1);
                     
-                    if (channel && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 0)) {
+                    if (channel && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1)) {
                         //printf("[NETWORKING] Setting channel actor...\n");
                         reinterpret_cast<void(__thiscall*)(UActorChannel*, AActor*)>(Globals::baseAddress + 0x0611970)(channel, actor);
                     }
@@ -232,6 +234,14 @@ namespace ServerNetworking {
                 }
             }
         }
+        
+        while (!Globals::channelsToClose.empty()) {
+            UActorChannel* ch = Globals::channelsToClose.back();
+
+            Globals::channelsToClose.pop_back();
+
+            (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
+        }
     }
 }
 
@@ -246,7 +256,7 @@ namespace Hooks{
 
     bool ProcessRemoteFunctionHook(AActor* actor, UFunction* function, void* params, void* stack) {
         if (!actor->WorldInfo) {
-            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo");
+            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Caverns_P.TheWorld.PersistentLevel.WorldInfo");
         }
 
         bool ret = ProcessRemoteFunction.call<bool>(actor, function, params, stack);
@@ -274,7 +284,7 @@ namespace Hooks{
         else if (message == 0x9) {
             printf("[NETWORKING] Spawning a new player!\n");
 
-            UWorld* theWorld = UObject::FindObject<UWorld>("World Toby_Raid_P.TheWorld");
+            UWorld* theWorld = UObject::FindObject<UWorld>("World Caverns_P.TheWorld");
             FURL theURL = FURL();
 
             FUniqueNetId netID = FUniqueNetId();
@@ -421,17 +431,15 @@ namespace Hooks{
     SafetyHookInline DestroyActor;
 
     bool DestroyActorHook(UWorld* world, AActor* actor, bool force) {
-        /*
         if (Globals::netDriver) {
             for (UNetConnection* connection : Globals::connections) {
                 UActorChannel* ch = ServerNetworking::GetActorChannelForActor(actor, connection);
 
                 if (ch) {
-                    (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
+                    Globals::channelsToClose.push_back(ch);
                 }
             }
         }
-        */
 
         return DestroyActor.call<bool>(world, actor, force);
     }
@@ -705,9 +713,9 @@ void MainThread() {
             //
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
-            EngineLogic::ExecConsoleCommand(L"open Toby_Raid_P");
+            EngineLogic::ExecConsoleCommand(L"open Caverns_P");
 
-            Sleep(7 * 1000);
+            Sleep(4 * 1000);
 
             ServerNetworking::InitListen();
 
