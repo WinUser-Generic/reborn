@@ -9,7 +9,8 @@
 
 namespace Settings {
     int32_t gamePort = 6969;
-    int32_t websocketPort = 1337;
+
+    float tickrate = 30.0f;
 }
 
 namespace Globals {
@@ -21,11 +22,13 @@ namespace Globals {
 
     std::vector<std::pair<UNetConnection*, std::vector<AActor*>*>> sentTemporaries = std::vector<std::pair<UNetConnection*, std::vector<AActor*>*>>();
 
-    float tickrate = 30.0f;
-
     std::vector<UActorChannel*> channelsToClose = std::vector<UActorChannel*>();
 
     std::mutex mutex;
+
+    bool shouldJoinMatchOnCharacterSelectComplete = false;
+    
+    std::wstring ipToJoin;
 }
 
 namespace SDKUtils {
@@ -96,7 +99,7 @@ namespace ServerNetworking {
 
         theWorld->NetDriver = NetDriver;
 
-        UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
+        UObject::FindObject<AWorldInfo>("WorldInfo IceScort_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
 
         FURL furl = FURL();
 
@@ -152,7 +155,7 @@ namespace ServerNetworking {
         static AWorldInfo* worldInfo = nullptr;
 
         if (!worldInfo)
-            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo");
+            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo IceScort_P.TheWorld.PersistentLevel.WorldInfo");
 
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
@@ -256,8 +259,21 @@ namespace ServerNetworking {
 }
 
 namespace ClientNetworking {
-    void JoinServer() {
-        EngineLogic::ExecConsoleCommand(L"open 127.0.0.1:6969"); //
+    void JoinServer(std::wstring ip) {
+        /*
+        std::wstring cmd = L"open ";
+
+        cmd.append(ip);
+
+        EngineLogic::ExecConsoleCommand(cmd.c_str());
+        */
+
+        Globals::shouldJoinMatchOnCharacterSelectComplete = true;
+        Globals::ipToJoin = ip;
+
+        EngineLogic::ExecConsoleCommand(L"open Wishbone_P?bTournamentMode=1");
+
+        //EngineLogic::ExecConsoleCommand(L"open 127.0.0.1:6969"); //
     }
 }
 
@@ -266,7 +282,7 @@ namespace Hooks{
 
     bool ProcessRemoteFunctionHook(AActor* actor, UFunction* function, void* params, void* stack) {
         if (!actor->WorldInfo) {
-            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Toby_Raid_P.TheWorld.PersistentLevel.WorldInfo");
+            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo IceScort_P.TheWorld.PersistentLevel.WorldInfo");
         }
 
         bool ret = ProcessRemoteFunction.call<bool>(actor, function, params, stack);
@@ -291,7 +307,7 @@ namespace Hooks{
         else if (message == 0x9) {
             printf("[NETWORKING] Spawning a new player!\n");
 
-            UWorld* theWorld = UObject::FindObject<UWorld>("World Toby_Raid_P.TheWorld");
+            UWorld* theWorld = UObject::FindObject<UWorld>("World IceScort_P.TheWorld");
             FURL theURL = FURL();
 
             FUniqueNetId netID = FUniqueNetId();
@@ -338,7 +354,7 @@ namespace Hooks{
 
             time += DeltaTime;
 
-            if (time > (1.0f / Globals::tickrate)) {
+            if (time > (1.0f / Settings::tickrate)) {
                 time = 0.0f;
 
                 ServerNetworking::TickNetServer(Globals::netDriver);
@@ -365,13 +381,89 @@ namespace Hooks{
         }
     }
 
+    void JoinMatchHookThread(std::string character) {
+        Sleep(3 * 1000);
+
+        std::wstring cmd = L"open ";
+
+        cmd.append(Globals::ipToJoin);
+
+        EngineLogic::ExecConsoleCommand(cmd.c_str());
+
+        Sleep(10 * 1000);
+
+        std::wstring convCharacter(character.begin(), character.end());
+
+        FString str = FString();
+
+        str.ArrayData = convCharacter.c_str();
+        str.ArrayCount = wcslen(convCharacter.c_str()) + 1;
+        str.ArrayMax = wcslen(convCharacter.c_str()) + 1;
+
+        APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
+
+        ppc->eventServerProcessConvolve(str, 0);
+
+        Sleep(3 * 1000);
+
+        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+        for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+            ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
+        }
+    }
+
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
         /*
-        if (function->GetFullName().contains("AdjustPosition")) {
+        if ((function->GetFullName().contains("Character") || function->GetFullName().contains("Character"))&& !function->GetFullName().contains("Input")) {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         }
-
         */
+
+        //PoplarPlayerReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerReplicationInfo - Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection
+
+        UFunction* confirmCharacterSelectionUFunction = nullptr;
+
+        if (!confirmCharacterSelectionUFunction)
+            confirmCharacterSelectionUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection");
+
+        if (Globals::shouldJoinMatchOnCharacterSelectComplete && function == confirmCharacterSelectionUFunction) {
+            Globals::shouldJoinMatchOnCharacterSelectComplete = false;
+
+            std::thread t(JoinMatchHookThread, SDKUtils::GetLastOfClass< APoplarCharacterSelectManager>()->MasterCharacterList[reinterpret_cast<APoplarPlayerReplicationInfo*>(object)->TempCharacterSelectIndex].NameID->GetFullName());
+
+            t.detach();
+        }
+
+        UFunction* serverConvolveUFunction = nullptr;
+
+        if (!serverConvolveUFunction)
+            serverConvolveUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerProcessConvolve");
+
+        if (Globals::netDriver && function == serverConvolveUFunction) {
+            printf("[NETWORKING] Switching player class...\n");
+
+            APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
+            APlayerController_eventServerProcessConvolve_Params* parms = reinterpret_cast<APlayerController_eventServerProcessConvolve_Params*>(params);
+
+            std::wstring wCharacterString(parms->C.c_str());
+
+            std::string characterString(wCharacterString.begin(), wCharacterString.end());
+
+            UPoplarPlayerNameIdentifierDefinition* playerClass = UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>(characterString);
+
+            if(playerClass)
+                ppc->eventSwitchPoplarPlayerClass(playerClass);
+
+            ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+            for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
+            }
+
+            return;
+        }
+
         /*
 
         if (function == veryShortClientAdjustPosition) {
@@ -707,8 +799,8 @@ void MainThread() {
                         std::cout << commandMovie->CharacterCells->GetFullName() << std::endl;
                         */
 
-EngineLogic::DontPauseOnLossOfFocus();
-EngineLogic::ExecConsoleCommand(L"open Toby_Raid_P?bTournamentMode=1");
+//EngineLogic::DontPauseOnLossOfFocus();
+//EngineLogic::ExecConsoleCommand(L"open IceScort_P?bTournamentMode=1");
 
 while (GetAsyncKeyState(VK_F5)) {
 
@@ -719,7 +811,7 @@ while (GetAsyncKeyState(VK_F5)) {
             //
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
-            EngineLogic::ExecConsoleCommand(L"open Toby_Raid_P");
+            EngineLogic::ExecConsoleCommand(L"open IceScort_P");
 
             Sleep(4 * 1000);
 
@@ -733,7 +825,7 @@ while (GetAsyncKeyState(VK_F5)) {
         if (GetAsyncKeyState(VK_F7) && !listening && !connected) {
             connected = true;
             EngineLogic::DontPauseOnLossOfFocus();
-            ClientNetworking::JoinServer();
+            ClientNetworking::JoinServer(L"174.55.86.128:6969");
 
             while (GetAsyncKeyState(VK_F7)) {
 
@@ -741,36 +833,7 @@ while (GetAsyncKeyState(VK_F5)) {
         }
 
         if (GetAsyncKeyState(VK_F8)) {
-            for(UPoplarCharacterSelectGFxMovie* mpri: SDKUtils::GetAllOfClass<UPoplarCharacterSelectGFxMovie>()){
-                FMetaLoadoutInstance loadout = FMetaLoadoutInstance();
 
-                loadout.Index = 0;
-                loadout.LoadoutName = L"0w0";
-                loadout.Perks[0] = FReplicatedPerkItem();
-                loadout.Perks[0].ItemLevel = INT_MAX;
-                loadout.Perks[0].PerkFunction = SDKUtils::GetLastOfClass<UPoplarPerkFunction>();
-
-                loadout.Perks[1] = FReplicatedPerkItem();
-                loadout.Perks[1].ItemLevel = INT_MAX;
-                loadout.Perks[1].PerkFunction = SDKUtils::GetLastOfClass<UPoplarPerkFunction>();
-
-                loadout.Perks[2] = FReplicatedPerkItem();
-                loadout.Perks[2].ItemLevel = INT_MAX;
-                loadout.Perks[2].PerkFunction = SDKUtils::GetLastOfClass<UPoplarPerkFunction>();
-                loadout.Version = 0;
-
-                mpri->LocalPlayerMetaData[0].PlayerLoadouts.PlayerLoadouts.push_back(loadout);
-                mpri->LocalPlayerMetaData[1].PlayerLoadouts.PlayerLoadouts.push_back(loadout);
-                std::cout << mpri->LocalPlayerMetaData[0].PlayerLoadouts.PlayerLoadouts.size() << std::endl;
-                std::cout << mpri->LocalPlayerMetaData[1].PlayerLoadouts.PlayerLoadouts.size() << std::endl;
-
-                mpri->PlayerUIState[0] = ECharacterSelectState::CSS_SelectingLoadout;
-                mpri->PlayerUIState[1] = ECharacterSelectState::CSS_SelectingLoadout;
-
-                mpri->PrimaryPlayerMenus.PlayerLoadoutData.PlayerLoadouts.push_back(loadout);
-
-                mpri->PrimaryPlayerMenus.LoadoutInfo.bIsShown = true;
-            }
 
             while (GetAsyncKeyState(VK_F8)) {
 
