@@ -29,6 +29,10 @@ namespace Globals {
     bool shouldJoinMatchOnCharacterSelectComplete = false;
     
     std::wstring ipToJoin;
+
+    std::wstring characterString;
+
+    bool shouldPopRPCOnCharacterPossession = true;
 }
 
 namespace SDKUtils {
@@ -390,37 +394,55 @@ namespace Hooks{
 
         EngineLogic::ExecConsoleCommand(cmd.c_str());
 
-        Sleep(10 * 1000);
-
         std::wstring convCharacter(character.begin(), character.end());
 
-        FString str = FString();
+        Globals::characterString = convCharacter;
 
-        str.ArrayData = convCharacter.c_str();
-        str.ArrayCount = wcslen(convCharacter.c_str()) + 1;
-        str.ArrayMax = wcslen(convCharacter.c_str()) + 1;
-
-        APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
-
-        ppc->eventServerProcessConvolve(str, 0);
-
-        Sleep(3 * 1000);
-
-        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
+        Globals::shouldPopRPCOnCharacterPossession = true;
+        /*
         for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
             ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
         }
+        */
+    }
+
+    void SetupAugmentsThread(APoplarPlayerController* ppc) {
+        Sleep(3 * 1000);
+
+        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
     }
 
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
         /*
-        if ((function->GetFullName().contains("Character") || function->GetFullName().contains("Character"))&& !function->GetFullName().contains("Input")) {
+        if (!function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Tick")) {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         }
         */
 
         //PoplarPlayerReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerReplicationInfo - Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection
+
+        UFunction* characterPossessionUFunction = nullptr;
+
+        if (!characterPossessionUFunction)
+            characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
+
+        if (Globals::shouldPopRPCOnCharacterPossession && function == characterPossessionUFunction) {
+            Globals::shouldPopRPCOnCharacterPossession = false;
+
+            FString* str = (FString*)EngineLogic::EngineMalloc(sizeof(FString));
+
+            str->ArrayData = Globals::characterString.c_str();
+            str->ArrayCount = wcslen(Globals::characterString.c_str()) + 1;
+            str->ArrayMax = wcslen(Globals::characterString.c_str()) + 1;
+
+            APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
+
+            ppc->eventServerProcessConvolve(*str, 0);
+
+            std::thread t(SetupAugmentsThread, ppc);
+
+            t.detach();
+        }
 
         UFunction* confirmCharacterSelectionUFunction = nullptr;
 
@@ -455,11 +477,13 @@ namespace Hooks{
             if(playerClass)
                 ppc->eventSwitchPoplarPlayerClass(playerClass);
 
+            
             ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
+            /*
             for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
                 ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
             }
+            */
 
             return;
         }
@@ -825,7 +849,7 @@ while (GetAsyncKeyState(VK_F5)) {
         if (GetAsyncKeyState(VK_F7) && !listening && !connected) {
             connected = true;
             EngineLogic::DontPauseOnLossOfFocus();
-            ClientNetworking::JoinServer(L"174.55.86.128:6969");
+            ClientNetworking::JoinServer(L"127.0.0.1:6969");
 
             while (GetAsyncKeyState(VK_F7)) {
 
