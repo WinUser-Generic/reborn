@@ -33,7 +33,7 @@ namespace Globals {
 
     std::wstring characterString;
 
-    bool shouldPopRPCOnCharacterPossession = true;
+    bool shouldPopRPCOnCharacterPossession = false;
 }
 
 namespace SDKUtils {
