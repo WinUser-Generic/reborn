@@ -6,6 +6,7 @@
 #include <iostream>
 #include <format>
 #include <mutex>
+#include <random>
 
 namespace Settings {
     int32_t gamePort = 6969;
@@ -245,6 +246,11 @@ namespace ServerNetworking {
                 }
             }
         }
+
+        std::random_device rd;
+        std::mt19937 gen(rd());
+
+        std::shuffle(Globals::connections.begin(), Globals::connections.end(), gen);
         
         {
             std::lock_guard<std::mutex> lock(Globals::mutex);
