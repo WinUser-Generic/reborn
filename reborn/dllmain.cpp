@@ -7,6 +7,8 @@
 #include <format>
 #include <mutex>
 #include <random>
+#include <algorithm>
+#include <execution>
 
 namespace Settings {
     int32_t gamePort = 6969;
@@ -33,7 +35,7 @@ namespace Globals {
 
     std::wstring characterString;
 
-    bool shouldPopRPCOnCharacterPossession = false;
+    bool shouldPopRPCOnCharacterPossession = true;
 }
 
 namespace SDKUtils {
@@ -156,6 +158,41 @@ namespace ServerNetworking {
         return *(uint8_t*)((__int64)connection + 0x98);
     }
 
+    bool CompareActorPriority(AActor* a, AActor* b) {
+        int aPrio = 0;
+        int bPrio = 0;
+
+        /*
+        * Ugly as shit atm, don't feel like making it better
+        */
+
+        if (a->IsA<APlayerController>()) {
+            aPrio = 10;
+        }
+
+        if (b->IsA<APlayerController>()) {
+            bPrio = 10;
+        }
+
+        if (a->IsA<APawn>()) {
+            aPrio = 9;
+        }
+
+        if (b->IsA<APawn>()) {
+            bPrio = 9;
+        }
+
+        if (a->IsA<AReplicationInfo>()) {
+            aPrio = 8;
+        }
+
+        if (b->IsA<AReplicationInfo>()) {
+            bPrio = 8;
+        }
+
+        return aPrio > bPrio;
+    }
+
     void TickNetServer(UTcpNetDriver* NetDriver) {
         static AWorldInfo* worldInfo = nullptr;
 
@@ -164,19 +201,21 @@ namespace ServerNetworking {
 
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
+        std::sort(actors.begin(), actors.end(), CompareActorPriority);
+
         for (UNetConnection* connection : Globals::connections) {
             if (!connection)
                 continue;
 
             if (GetConnectionState(connection) != 3)
                 continue;
-                
-            if (connection->Actor->PendingAdjustment.TimeStamp > 0.0) {
-                connection->Actor->eventSendClientAdjustment();
-            }
 
             if(!(*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1))
                 continue;
+
+            if (connection->Actor->PendingAdjustment.TimeStamp > 0.0) {
+                connection->Actor->eventSendClientAdjustment();
+            }
 
             for (AActor* actor : actors) {
                 if (!actor)
@@ -185,11 +224,11 @@ namespace ServerNetworking {
                 if (!(*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1))
                     continue;
 
-                (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
-
                 if (actor->IsA<APlayerController>() && (connection->Actor != actor)) {
                     continue;
                 }
+
+                (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
 
                 if (actor->bNetTemporary) {
                     bool shouldContinue = false;
@@ -236,21 +275,17 @@ namespace ServerNetworking {
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
                     if (channel->Actor) {
                         channel->Actor->NetTag++;
-
-                        //if(actor->bNetTemporary)
-                            //(*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)channel + 0x210)))(channel); // Close channel
                     }
-                }
-                else if (channel && (!channel->Actor || channel->Actor->bPendingDelete)) {
-                    //(*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)channel + 0x210)))(channel);
                 }
             }
         }
 
+        /*
         std::random_device rd;
         std::mt19937 gen(rd());
 
         std::shuffle(Globals::connections.begin(), Globals::connections.end(), gen);
+        */
         
         {
             std::lock_guard<std::mutex> lock(Globals::mutex);
