@@ -36,6 +36,8 @@ namespace Globals {
     std::wstring characterString;
 
     bool shouldPopRPCOnCharacterPossession = true;
+
+    float time = 0.0f;
 }
 
 namespace SDKUtils {
@@ -147,7 +149,10 @@ namespace ServerNetworking {
                 continue;
             }
             else {
-                ret.push_back(actor);
+                if (actor->bAlwaysRelevant || actor->bForceNetUpdate || actor->bPendingNetUpdate || Globals::time - actor->LastNetUpdateTime > 1.0f / actor->NetUpdateFrequency) {
+                    actor->LastNetUpdateTime = Globals::time;
+                    ret.push_back(actor);
+                }
             }
         }
 
@@ -330,6 +335,12 @@ namespace Hooks{
             actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo IceScort_P.TheWorld.PersistentLevel.WorldInfo");
         }
 
+        if (function->GetFullName().contains("ServerMove")) { // TODO: Fix this abomination
+            if (!(function->FunctionFlags & FUNC_NetReliable)) {
+                function->FunctionFlags |= FUNC_NetReliable;
+            }
+        }
+
         bool ret = ProcessRemoteFunction.call<bool>(actor, function, params, stack);
 
         return ret;
@@ -395,6 +406,8 @@ namespace Hooks{
         GameEngineTick.call<void>(engine, DeltaTime);
 
         if (Globals::netDriver) {
+            Globals::time += DeltaTime;
+
             static float time = 0.0;
 
             time += DeltaTime;
@@ -455,10 +468,16 @@ namespace Hooks{
 
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
         /*
-        if (!function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Tick")) {
+        if (function->GetFullName().contains("ServerMove")) {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         }
         */
+
+        if (function->GetFullName().contains("ServerMove")) {
+            if (!(function->FunctionFlags & FUNC_NetReliable)) { // TODO: Fix this abomination
+                function->FunctionFlags |= FUNC_NetReliable;
+            }
+        }
 
         //PoplarPlayerReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerReplicationInfo - Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection
 
