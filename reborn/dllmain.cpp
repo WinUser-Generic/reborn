@@ -108,7 +108,7 @@ namespace ServerNetworking {
 
         theWorld->NetDriver = NetDriver;
 
-        UObject::FindObject<AWorldInfo>("WorldInfo IceScort_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
+        UObject::FindObject<AWorldInfo>("WorldInfo Snowdrift_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
 
         FURL furl = FURL();
 
@@ -202,7 +202,7 @@ namespace ServerNetworking {
         static AWorldInfo* worldInfo = nullptr;
 
         if (!worldInfo)
-            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo IceScort_P.TheWorld.PersistentLevel.WorldInfo");
+            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Snowdrift_P.TheWorld.PersistentLevel.WorldInfo");
 
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
@@ -325,6 +325,24 @@ namespace ClientNetworking {
 
         //EngineLogic::ExecConsoleCommand(L"open 127.0.0.1:6969"); //
     }
+
+    bool IsNetReady(UNetConnection* connection, int saturate) {
+        return 1;
+    }
+
+    void ForceAlwaysNetReady() {
+        static bool alreadyForced = false;
+
+        if (!alreadyForced) {
+            alreadyForced = true;
+            static SafetyHookVmt vmts;
+            static SafetyHookVm vms;
+
+            vmts = safetyhook::create_vmt(SDKUtils::GetLastOfClass<UNetConnection>());
+
+            vms = safetyhook::create_vm(vmts, 0x260 / 0x8, IsNetReady);
+        }
+    }
 }
 
 namespace Hooks{
@@ -332,13 +350,7 @@ namespace Hooks{
 
     bool ProcessRemoteFunctionHook(AActor* actor, UFunction* function, void* params, void* stack) {
         if (!actor->WorldInfo) {
-            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo IceScort_P.TheWorld.PersistentLevel.WorldInfo");
-        }
-
-        if (function->GetFullName().contains("ServerMove")) { // TODO: Fix this abomination
-            if (!(function->FunctionFlags & FUNC_NetReliable)) {
-                function->FunctionFlags |= FUNC_NetReliable;
-            }
+            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Snowdrift_P.TheWorld.PersistentLevel.WorldInfo");
         }
 
         bool ret = ProcessRemoteFunction.call<bool>(actor, function, params, stack);
@@ -348,9 +360,7 @@ namespace Hooks{
 
     SafetyHookInline WorldControlMessage;
 
-    bool IsNetReady(UNetConnection* connection, int saturate) {
-        return 1;
-    }
+    
 
     void WorldControlMessageHook(UWorld* world, UNetConnection* connection, uint8_t message, void* inbunch) {
         WorldControlMessage.call<void>(world, connection, message, inbunch);
@@ -363,7 +373,7 @@ namespace Hooks{
         else if (message == 0x9) {
             printf("[NETWORKING] Spawning a new player!\n");
 
-            UWorld* theWorld = UObject::FindObject<UWorld>("World IceScort_P.TheWorld");
+            UWorld* theWorld = UObject::FindObject<UWorld>("World Snowdrift_P.TheWorld");
             FURL theURL = FURL();
 
             FUniqueNetId netID = FUniqueNetId();
@@ -390,10 +400,6 @@ namespace Hooks{
 
             Globals::connections.push_back(connection);
             Globals::sentTemporaries.push_back(std::make_pair(connection, new std::vector<AActor*>()));
-
-            //vmts.push_back(safetyhook::create_vmt(connection));
-
-            //vms.push_back(safetyhook::create_vm(vmts.back(), 0x260 / 0x8, IsNetReady));
         }
         else if (message == 0xf) {
             printf("[NETWORKING] New player ack'd!\n");
@@ -473,12 +479,6 @@ namespace Hooks{
         }
         */
 
-        if (function->GetFullName().contains("ServerMove")) {
-            if (!(function->FunctionFlags & FUNC_NetReliable)) { // TODO: Fix this abomination
-                function->FunctionFlags |= FUNC_NetReliable;
-            }
-        }
-
         //PoplarPlayerReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerReplicationInfo - Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection
 
         UFunction* characterPossessionUFunction = nullptr;
@@ -486,8 +486,10 @@ namespace Hooks{
         if (!characterPossessionUFunction)
             characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
 
-        if (Globals::shouldPopRPCOnCharacterPossession && function == characterPossessionUFunction) {
+        if (Globals::shouldPopRPCOnCharacterPossession && function == characterPossessionUFunction && !Globals::netDriver) {
             Globals::shouldPopRPCOnCharacterPossession = false;
+
+            ClientNetworking::ForceAlwaysNetReady();
 
             FString* str = (FString*)EngineLogic::EngineMalloc(sizeof(FString));
 
@@ -884,7 +886,7 @@ void MainThread() {
                         */
 
 //EngineLogic::DontPauseOnLossOfFocus();
-//EngineLogic::ExecConsoleCommand(L"open IceScort_P?bTournamentMode=1");
+//EngineLogic::ExecConsoleCommand(L"open Snowdrift_P?bTournamentMode=1");
 
 while (GetAsyncKeyState(VK_F5)) {
 
@@ -895,7 +897,7 @@ while (GetAsyncKeyState(VK_F5)) {
             //
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
-            EngineLogic::ExecConsoleCommand(L"open IceScort_P");
+            EngineLogic::ExecConsoleCommand(L"open Snowdrift_P");
 
             Sleep(4 * 1000);
 
@@ -909,7 +911,7 @@ while (GetAsyncKeyState(VK_F5)) {
         if (GetAsyncKeyState(VK_F7) && !listening && !connected) {
             connected = true;
             EngineLogic::DontPauseOnLossOfFocus();
-            ClientNetworking::JoinServer(L"127.0.0.1:6969");
+            ClientNetworking::JoinServer(L"174.55.86.128:6969");
 
             while (GetAsyncKeyState(VK_F7)) {
 
@@ -917,7 +919,9 @@ while (GetAsyncKeyState(VK_F5)) {
         }
 
         if (GetAsyncKeyState(VK_F8)) {
-
+            if (!listening) {
+                
+            }
 
             while (GetAsyncKeyState(VK_F8)) {
 
