@@ -379,7 +379,7 @@ private:
 		static size_t baseAddress = 0x0;
 		
 		if(!baseAddress)
-			baseAddress = (size_t)GetModuleHandleA("Battleborn.exe");
+			baseAddress = (size_t)GetModuleHandleA(nullptr);
 
 		int* param_1 = reinterpret_cast<int* (*)()>(baseAddress + 0x0d33260)();
 
@@ -791,7 +791,7 @@ private:
 		static size_t baseAddress = 0x0;
 
 		if (!baseAddress)
-			baseAddress = (size_t)GetModuleHandleA("Battleborn.exe");
+			baseAddress = (size_t)GetModuleHandleA(nullptr);
 
 		int* param_1 = reinterpret_cast<int* (*)()>(baseAddress + 0x0d33260)();
 
@@ -802,20 +802,22 @@ private:
 public:
 	FString& assign(ElementPointer other)
 	{
-		ArrayCount = (other ? (wcslen(other) + 1) : 0);
+		ArrayCount = (other ? ((wcslen(other)) + 1) : 0);
 		ArrayMax = ArrayCount;
 		if (other) {
-			ArrayData = (ElementPointer)EngineMalloc((wcslen(other) + 1)); // IF WE CRASH ON ALLOC LOOK HERE
-			memcpy_s((void*)ArrayData, (wcslen(other) + 1), other, (wcslen(other) + 1));
+			ArrayData = (ElementPointer)EngineMalloc((wcslen(other) * 2) + 2); // IF WE CRASH ON ALLOC LOOK HERE
+			memcpy_s((void*)ArrayData, ((wcslen(other) * 2) + 2), other, ((wcslen(other) * 2) + 2));
 		}
 		else {
 			ArrayData = nullptr;
 		}
+		
 		/*
 		ArrayCount = (other ? (wcslen(other) + 1) : 0);
 		ArrayMax = ArrayCount;
 		ArrayData = (ArrayCount > 0 ? other : nullptr);
 		*/
+		
 		return *this;
 	}
 
@@ -847,7 +849,7 @@ public:
 
 	int32_t length() const
 	{
-		return ArrayCount;
+		return (ArrayCount - 2) / 2;
 	}
 
 	int32_t size() const

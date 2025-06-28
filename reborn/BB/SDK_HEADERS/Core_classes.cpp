@@ -165,13 +165,8 @@ void UObject::ProcessEvent(class UFunction* uFunction, void* uParams, void* uRes
 	if (!PE) {
 		static size_t moduleBase = 0;
 
-		if (moduleBase == 0) {
-			moduleBase = (size_t)GetModuleHandleA("Battleborn.exe");
-		}
+		moduleBase = (size_t)GetModuleHandleA(nullptr);
 
-		if (moduleBase == 0) {
-			moduleBase = (size_t)GetModuleHandleA("Serverborn.exe");
-		}
 		PE = reinterpret_cast<ProcessEvent>(moduleBase + (size_t)0x109ca0);
 	}
 

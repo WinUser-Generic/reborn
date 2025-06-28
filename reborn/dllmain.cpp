@@ -11,9 +11,15 @@
 #include <execution>
 
 namespace Settings {
-    int32_t gamePort = 6969;
+    int32_t gamePort = 7777;
 
     float tickrate = 30.0f;
+
+    unsigned int NumPlayersToStart = 2;
+
+    unsigned int TeamMinSizeForStart = 0;
+
+    const wchar_t* MapString = L"open Snowblind_P"; //
 }
 
 namespace Globals {
@@ -38,6 +44,12 @@ namespace Globals {
     bool shouldPopRPCOnCharacterPossession = true;
 
     float time = 0.0f;
+
+    bool amServer = false;
+
+    UWorld* GetGWorld() {
+        return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
+    }
 }
 
 namespace SDKUtils {
@@ -91,10 +103,37 @@ namespace EngineLogic {
     }
 
     void* EngineMalloc(size_t size) {
+        /*
         int* param_1 = reinterpret_cast<int* (*)()>(Globals::baseAddress + 0x0d33260)();
 
         return reinterpret_cast<void* (*)(unsigned int param_1, size_t param_2, size_t param_3, size_t param_4, size_t param_5, unsigned int param_6, unsigned int param_7, const char* param_8, unsigned int param_9, const char* param_10)>(Globals::baseAddress + 0x0d2e160)(*(int*)(param_1 + 0x10), 0, size, 0x8, 0, 0, 0x31c0019,
             "t:\\POPLAR-PATCH-PC\\Development\\Src\\Core\\Src\\gbxmem.cpp", 0x46, "appMalloc");
+            */
+
+        return reinterpret_cast<void* (*)(size_t)>(Globals::baseAddress + 0xD2E0A0)(size);
+    }
+
+    FString* MakeFString(const wchar_t* contents) {
+        size_t length = wcslen(contents);
+
+        FString* string = (FString*)EngineMalloc(sizeof(FString));
+
+        *string = FString();
+
+        string->ArrayCount = length;
+        string->ArrayMax = string->ArrayCount;
+
+        void* data = EngineMalloc(sizeof(wchar_t) * (string->ArrayMax + 1));
+
+        memcpy_s(data, sizeof(wchar_t) * (string->ArrayMax + 1), contents, (length + 1) * sizeof(wchar_t));
+
+        string->ArrayData = (wchar_t*)data;
+
+        return string;
+    }
+
+    void* ScaleformMalloc(unsigned int size) {
+        return reinterpret_cast<void* (*)(long poolId, __int64, __int64 size, __int64 align, __int64, int, __int64, __int64, int, __int64)>(Globals::baseAddress + 0xD2E160)(2, 0, size, 0x8, 0, 1, 0x321001F, 0x26b62fa, 0, 0x26b62fa);
     }
 }
 
@@ -108,7 +147,7 @@ namespace ServerNetworking {
 
         theWorld->NetDriver = NetDriver;
 
-        UObject::FindObject<AWorldInfo>("WorldInfo Snowdrift_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_ListenServer;
+        SDKUtils::GetLastOfClass<AWorldInfo>()->NetMode = ENetMode::NM_DedicatedServer;
 
         FURL furl = FURL();
 
@@ -202,7 +241,7 @@ namespace ServerNetworking {
         static AWorldInfo* worldInfo = nullptr;
 
         if (!worldInfo)
-            worldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Snowdrift_P.TheWorld.PersistentLevel.WorldInfo");
+            worldInfo = SDKUtils::GetLastOfClass<AWorldInfo>();
 
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
@@ -310,18 +349,18 @@ namespace ServerNetworking {
 
 namespace ClientNetworking {
     void JoinServer(std::wstring ip) {
-        /*
         std::wstring cmd = L"open ";
 
         cmd.append(ip);
 
         EngineLogic::ExecConsoleCommand(cmd.c_str());
-        */
 
+        /*
         Globals::shouldJoinMatchOnCharacterSelectComplete = true;
         Globals::ipToJoin = ip;
 
-        EngineLogic::ExecConsoleCommand(L"open Wishbone_P?bTournamentMode=1");
+        EngineLogic::ExecConsoleCommand(L"open Wishbone_P?bTournamentMode=1?WarmupTime=30");
+        */
 
         //EngineLogic::ExecConsoleCommand(L"open 127.0.0.1:6969"); //
     }
@@ -350,7 +389,7 @@ namespace Hooks{
 
     bool ProcessRemoteFunctionHook(AActor* actor, UFunction* function, void* params, void* stack) {
         if (!actor->WorldInfo) {
-            actor->WorldInfo = UObject::FindObject<AWorldInfo>("WorldInfo Snowdrift_P.TheWorld.PersistentLevel.WorldInfo");
+            actor->WorldInfo = SDKUtils::GetLastOfClass<AWorldInfo>();
         }
 
         bool ret = ProcessRemoteFunction.call<bool>(actor, function, params, stack);
@@ -360,7 +399,9 @@ namespace Hooks{
 
     SafetyHookInline WorldControlMessage;
 
-    
+    bool IsNetReady(UNetConnection* connection, int saturate) {
+        return 1;
+    }
 
     void WorldControlMessageHook(UWorld* world, UNetConnection* connection, uint8_t message, void* inbunch) {
         WorldControlMessage.call<void>(world, connection, message, inbunch);
@@ -373,7 +414,7 @@ namespace Hooks{
         else if (message == 0x9) {
             printf("[NETWORKING] Spawning a new player!\n");
 
-            UWorld* theWorld = UObject::FindObject<UWorld>("World Snowdrift_P.TheWorld");
+            UWorld* theWorld = Globals::GetGWorld();
             FURL theURL = FURL();
 
             FUniqueNetId netID = FUniqueNetId();
@@ -388,7 +429,7 @@ namespace Hooks{
 
             FString err = FString();
 
-            APoplarPlayerController* pc = reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
+            APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(FString(), FString(), netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
 
             connection->Actor = pc;
 
@@ -396,10 +437,12 @@ namespace Hooks{
 
             pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
 
-            SDKUtils::GetLastOfClass<AGameInfo>()->eventPostLogin(pc);
+            //pc->ClientGotoState(FName(), FName());
 
             Globals::connections.push_back(connection);
             Globals::sentTemporaries.push_back(std::make_pair(connection, new std::vector<AActor*>()));
+
+            SDKUtils::GetLastOfClass<AGameInfo>()->StartHumans();
         }
         else if (message == 0xf) {
             printf("[NETWORKING] New player ack'd!\n");
@@ -435,8 +478,10 @@ namespace Hooks{
     SafetyHookInline ProcessEvent;
 
     void StartupCompletedHook() {
+        std::cout << "Startup Complete!" << std::endl;
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
         SDKUtils::GetLastOfClass<UPoplarPressStartGFxMovie>()->ContinueToMenu();
+        EngineLogic::ExecConsoleCommand(L"open 127.0.0.1");
     }
 
     void MainPanelClickedHook(uint32_t PanelId) {
@@ -473,9 +518,30 @@ namespace Hooks{
     }
 
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
+        //if (!function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Move")) { //
+            //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        //}
+
         /*
-        if (function->GetFullName().contains("ServerMove")) {
-            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        if (function->GetFullName().contains("FromHydra")) {
+            reinterpret_cast<UPoplarMetagameInventory_execOnReceivePlayerMetaDataFromHydra_Params*>(params)->ServiceResult = 0;
+        }
+
+        if (function->GetFullName().contains("RefreshExperience")) {
+            reinterpret_cast<UPoplarFrontendGFxMovie_execOnRefreshExperienceDataComplete_Params*>(params)->ServiceResult = 0;
+        }
+
+        if (function->GetFullName().contains("DataProvider")) {
+            std::cout << "DataProvider" << std::endl;
+            std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->Provider->GetFullName() << std::endl;
+            std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->Type.ToString() << std::endl;
+            std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->StartIndex << std::endl;
+            std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->EndIndex << std::endl;
+
+            if (reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->EndIndex == 39) {
+                std::cout << "END INDEX 39, SKIPPING" << std::endl;
+                //return;
+            }
         }
         */
 
@@ -486,6 +552,7 @@ namespace Hooks{
         if (!characterPossessionUFunction)
             characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
 
+        /*
         if (Globals::shouldPopRPCOnCharacterPossession && function == characterPossessionUFunction && !Globals::netDriver) {
             Globals::shouldPopRPCOnCharacterPossession = false;
 
@@ -505,6 +572,7 @@ namespace Hooks{
 
             t.detach();
         }
+        */
 
         UFunction* confirmCharacterSelectionUFunction = nullptr;
 
@@ -536,38 +604,17 @@ namespace Hooks{
 
             UPoplarPlayerNameIdentifierDefinition* playerClass = UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>(characterString);
 
-            if(playerClass)
-                ppc->eventSwitchPoplarPlayerClass(playerClass);
+            if (playerClass) {
+                //ppc->eventServerSelectCharacter(playerClass, nullptr, nullptr, true);
 
+                //ppc->eventSwitchPoplarPlayerClass(playerClass);
+                //ppc->ServerRestartPlayer();
+            }
             
             ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-            /*
-            for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
-            }
-            */
 
             return;
         }
-
-        /*
-
-        if (function == veryShortClientAdjustPosition) {
-            APlayerController_execVeryShortClientAdjustPosition_Params* parms = reinterpret_cast<APlayerController_execVeryShortClientAdjustPosition_Params*>(params);
-
-            APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
-
-            ppc->LongClientAdjustPosition(parms->TimeStamp, FName(1830), EPhysics::PHYS_Walking, parms->NewLocX, parms->NewLocY, parms->NewLocZ, 0, 0, 0, parms->NewBase, ppc->Pawn ? ppc->Pawn->Floor.X : 0, ppc->Pawn ? ppc->Pawn->Floor.Y : 0, ppc->Pawn ? ppc->Pawn->Floor.Z : 0);
-        }
-
-        if (function == clientAdjustPosition) {
-            APlayerController_execClientAdjustPosition_Params* parms = reinterpret_cast<APlayerController_execClientAdjustPosition_Params*>(params);
-
-            APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
-
-            ppc->LongClientAdjustPosition(parms->TimeStamp, parms->NewState, (EPhysics)parms->newPhysics, parms->NewLocX, parms->NewLocY, parms->NewLocZ, parms->NewVelX, parms->NewVelY, parms->NewVelZ, parms->NewBase, ppc->Pawn ? ppc->Pawn->Floor.X : 0, ppc->Pawn ? ppc->Pawn->Floor.Y : 0, ppc->Pawn ? ppc->Pawn->Floor.Z : 0);
-        }
-        */
 
         //Function PoplarGame.PoplarMetagameInventory.OnReceivePlayerMetaDataFromHydra
 
@@ -591,6 +638,7 @@ namespace Hooks{
             //return;
         }
 
+        /*
         static UFunction* refreshInventoryUFunction = nullptr;
 
         if (!refreshInventoryUFunction)
@@ -608,6 +656,7 @@ namespace Hooks{
         if (function == readStatsUFunction) {
             reinterpret_cast<UPoplarCommandGFxMovie_execReadPlayersStatsDataComplete_Params*>(params)->ServiceResult = 0;
         }
+        */
 
         //Function PoplarGame.PoplarCommandGFxMovie.ReadPlayersStatsDataComplete
 
@@ -641,14 +690,152 @@ namespace Hooks{
     void JustDoNothingHook(void* a1, void* a2, void* a3) {
         return;
     }
+
+    SafetyHookInline PoplarGameInfoSetup;
+
+    __int64 PoplarGameInfoSetupHook(APoplarGameInfo* a1, __int64 a2) {
+        UPoplarCharacterSelectStyleDefinition* codeNameString = nullptr;
+
+        int i = 0;
+
+        /*
+        if (Globals::amServer) {
+            for (UPoplarCharacterSelectStyleDefinition* css : SDKUtils::GetAllOfClass< UPoplarCharacterSelectStyleDefinition>()) {
+                if (!codeNameString && i == 3) {
+                    codeNameString = css;
+                }
+
+                i++;
+
+                std::cout << css->StyleName.ToString() << std::endl;
+                std::cout << css->CodeName.ToString() << std::endl;
+                std::cout << "------------------------" << std::endl;
+            }
+
+            //a1->CharacterSelectStyleOptionString = codeNameString->CodeName;
+
+            for (APoplarCharacterSelectManager* cs : SDKUtils::GetAllOfClass< APoplarCharacterSelectManager>()) {
+                std::cout << cs->GetFullName() << std::endl;
+                cs->SelectionStyleDefinition = codeNameString;
+                cs->bWaitForStandaloneEntitlements = false;
+            }
+        }
+        */
+
+        std::cout << "[Game] Launched World " << Globals::GetGWorld()->GetFullName() << "!" << std::endl;
+
+        if (Globals::amServer && !Globals::GetGWorld()->GetFullName().contains("MenuMap")) {
+            a1->NumPlayers = Settings::NumPlayersToStart;
+
+            a1->EffectiveNumPlayers = Settings::NumPlayersToStart;
+        }        
+
+        __int64 ret = PoplarGameInfoSetup.call<__int64>(a1, a2);
+
+        if (Globals::amServer && !Globals::GetGWorld()->GetFullName().contains("MenuMap")) {
+            a1->NumPlayers = Settings::NumPlayersToStart;
+
+            a1->TeamMinSizeForStart = Settings::TeamMinSizeForStart;
+
+            a1->EffectiveNumPlayers = Settings::NumPlayersToStart;
+
+            ServerNetworking::InitListen();
+        }
+
+        /*
+        if (Globals::amServer)
+            UObject::FindObject<AWorldInfo>("WorldInfo Snowdrift_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_DedicatedServer;
+
+        printf("[GAME] Overrode character select mode!\n");
+        if (Globals::amServer) {
+            a1->CharacterSelectStyleOptionString = codeNameString->CodeName;
+
+            for (APoplarCharacterSelectManager* cs : SDKUtils::GetAllOfClass< APoplarCharacterSelectManager>()) {
+                std::cout << cs->GetFullName() << std::endl;
+                cs->SelectionStyleDefinition = codeNameString;
+                cs->bWaitForStandaloneEntitlements = false;
+            }
+
+            for (APoplarGameReplicationInfo* csmd : SDKUtils::GetAllOfClass< APoplarGameReplicationInfo>()) {
+                std::cout << csmd->GetFullName() << std::endl;
+                if (csmd->CharacterSelectManager) {
+                    std::cout << csmd->GetFullName() << std::endl;
+                }
+                else {
+                    csmd->CharacterSelectManager = SDKUtils::GetLastOfClass<APoplarCharacterSelectManager>();
+                    csmd->CharacterSelectManager->SelectionStyleDefinition = codeNameString;
+                }
+            }
+
+            
+        }
+        */
+
+        return ret;
+    }
+
+    SafetyHookInline MakeHTTPRequest;
+
+    __int64 MakeHTTPRequestHook(__int64 a1, int a2, __int64 a3, const wchar_t* a4, __int64 a5, __int64 a6, __int64 a7, __int64 a8, int a9, char a10) {
+        // Convert wide string to string
+        std::wstring ws(a4);
+        std::string url(ws.begin(), ws.end());
+
+        // Log original URL
+        std::cout << "Original URL: " << url << std::endl;
+
+        // Find the protocol end (http:// or https://)
+        size_t protocolEnd = url.find("://");
+        if (protocolEnd != std::string::npos) {
+            protocolEnd += 3; // Move past "://"
+
+            // Find the end of the host (could be '/', ':', '?' or end of string)
+            size_t hostEnd = url.find_first_of("/:?", protocolEnd);
+            if (hostEnd == std::string::npos) {
+                hostEnd = url.length();
+            }
+
+            // Replace the host with 127.0.0.1
+            std::string newUrl = "http://localhost:8080" + url.substr(hostEnd);
+
+            // Log modified URL
+            std::cout << "Modified URL: " << newUrl << std::endl;
+
+            // Convert back to wide string
+            std::wstring newWs(newUrl.begin(), newUrl.end());
+
+            // Call original function with modified URL
+            return MakeHTTPRequest.call<__int64>(a1, a2, a3, newWs.c_str(), a5, a6, a7, a8, a9, a10);
+        }
+
+        // If no protocol found, call with original URL
+        std::cout << "No protocol found, using original URL" << std::endl;
+        return MakeHTTPRequest.call<__int64>(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+    }
+
+    SafetyHookInline ConsoleCommand;
+    
+    bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3) {
+        a2 = Settings::MapString;
+
+        bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
+
+        ConsoleCommand = {};
+
+        return ret;
+    }
 }
 
 namespace Init {
     void Globals() {
-        Globals::baseAddress = (size_t)GetModuleHandleA("Battleborn.exe");
+        Globals::baseAddress = (size_t)GetModuleHandleA(nullptr);
 
         GObjects = reinterpret_cast<TArray<UObject*>*>(Globals::baseAddress + (size_t)0x035152D0);
         GNames = reinterpret_cast<TArray<FNameEntry*>*>(Globals::baseAddress + (size_t)0x03515228);
+
+        if ((size_t)GetModuleHandleA("Serverborn.exe") != 0x0) {
+            Globals::amServer = true;
+        }
     }
 
     void Console() {
@@ -662,57 +849,165 @@ namespace Init {
     }
 
     void Hooks() {
-        Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
+        if (Globals::amServer) {
+            Hooks::ConsoleCommand = safetyhook::create_inline((void*)(Globals::baseAddress + 0x01fca00), &Hooks::ConsoleCommandHook);
+            Hooks::DestroyActor = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3EF070), &Hooks::DestroyActorHook);
+            Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x16EC4D0), &Hooks::JustDoNothingHook);
+            Hooks::JustDoNothing2 = safetyhook::create_inline((void*)(Globals::baseAddress + 0xE5F320), &Hooks::JustDoNothingHook);
+            Hooks::PoplarGameInfoSetup = safetyhook::create_inline((void*)(Globals::baseAddress + 0x1474140), &Hooks::PoplarGameInfoSetupHook);
+            Hooks::GameEngineTick = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0207e10), &Hooks::GameEngineTickHook);
+            Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
+        }
+        else {
+            Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
+            
+        }
+
         Hooks::ProcessEvent = safetyhook::create_inline((void*)(Globals::baseAddress + 0x109ca0), &Hooks::ProcessEventHook);
-        Hooks::GameEngineTick = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0207e10), &Hooks::GameEngineTickHook);
-        Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
+        
         Hooks::ProcessRemoteFunction = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0728fd0), &Hooks::ProcessRemoteFunctionHook);
-        Hooks::DestroyActor = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3EF070), &Hooks::DestroyActorHook);
-        Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x16EC4D0), &Hooks::JustDoNothingHook);
-        Hooks::JustDoNothing2 = safetyhook::create_inline((void*)(Globals::baseAddress + 0xE5F320), &Hooks::JustDoNothingHook);
-        //E5F320
-        //Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x84F370), &Hooks::JustDoNothingHook);
+        
+        //Hooks::MakeHTTPRequest = safetyhook::create_inline((void*)(Globals::baseAddress + 0xD61DE0), &Hooks::MakeHTTPRequestHook);
     }
 }
+
+/*
+FString* MakeFString(const wchar_t* contents) {
+    FString* string = (FString*)EngineLogic::EngineMalloc(sizeof(FString));
+
+    *string = FString();
+
+    string->ArrayCount = wcslen(contents) + 1;
+    string->ArrayMax = string->ArrayCount;
+
+    void* data = EngineLogic::EngineMalloc(sizeof(wchar_t) * (wcslen(contents)));
+
+    memcpy_s(data, sizeof(wchar_t) * (wcslen(contents)), contents, (wcslen(contents)) * sizeof(wchar_t));
+
+    string->ArrayData = (wchar_t*)data;
+
+    return string;
+}
+*/
 
 void MainThread() {
     Init::Globals();
     Init::Console();
     Init::Hooks();
 
+    while (!Globals::GetGWorld()) {
+        if (Globals::amServer) {
+            *(__int8*)(Globals::baseAddress + 0x3495af8) = 0; // GIsClient
+            *(__int8*)(Globals::baseAddress + 0x348fad7) = 1; // GIsServer
+        }
+    }
+
+    if (Globals::amServer) {
+        EngineLogic::DontPauseOnLossOfFocus();
+    }
+    else {
+        ClientNetworking::JoinServer(L"127.0.0.1");
+    }
+
+    if (Globals::amServer) {
+        while (true) {
+            while (!GetAsyncKeyState(VK_F7)) {
+
+            }
+
+            std::cout << SDKUtils::GetLastOfClass< APoplarGameInfo>()->CharacterSelectStyleOption << std::endl;
+            SDKUtils::GetLastOfClass< APoplarGameReplicationInfo>()->CurrentMatchState.bTournamentMode = true;
+            std::cout << SDKUtils::GetLastOfClass< APoplarGameReplicationInfo>()->CurrentMatchState.State << std::endl;
+            SDKUtils::GetLastOfClass< APoplarGameReplicationInfo>()->CurrentMatchState.State = 2;
+            SDKUtils::GetLastOfClass< APoplarGameReplicationInfo>()->OnRep_CurrentMatchState(FMatchStateData());
+
+            while (GetAsyncKeyState(VK_F7)) {
+
+            }
+        }
+    }
+
     bool listening = false;
     bool connected = false;
 
+    /*
     while (true) {
         if (GetAsyncKeyState(VK_F5)) {
-            /*
+            for (APoplarGameInfo* gi : SDKUtils::GetAllOfClass<APoplarGameInfo>()) {
+                if (gi->GetFullName().contains("Default"))
+                    continue;
+
+                std::cout << gi->GetFullName() << std::endl;
+
+                TArray< FServerPlayerMetaData> metaArray = TArray<FServerPlayerMetaData>();
+
+                FServerPlayerMetaData meta = FServerPlayerMetaData();
+
+                meta.BankSize = 999;
+
+                metaArray.push_back(meta);
+
+                gi->OnReadPlayerMetaData(0, metaArray);
+            }
+
+            FPlayerExperienceData exp = FPlayerExperienceData();
+
+            exp.PlayerID = SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId();
+
+            FExperienceData sExp = FExperienceData();
+
+            sExp.AverageQueueSeconds = 69;
+            sExp.bEnabled = true;
+            sExp.MatchmakingType = 0;
+
+            FExperienceDataGameMode gm = FExperienceDataGameMode();
+            sExp.GameModes.push_back(gm);
+            //sExp.Description = *MakeFString(L"one");
+            //sExp.GameHopperName = *MakeFString(L"two");
+            //sExp.Name = *MakeFString(L"three");
+            //sExp.Rules = *MakeFString(L"four");
+            //sExp.Requirements = *MakeFString(L"five");
+
+            exp.Experiences.push_back(sExp);
+
+            SDKUtils::GetLastOfClass< UPoplarOnlineClientPlayerService>()->CachedExperienceData.push_back(exp);
+
+            //SDKUtils::GetLastOfClass<UPoplarPostMatchGFxMovie>()->Show(false, false, false, SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId());
+
             for (APoplarPlayerReplicationInfo* pri : SDKUtils::GetAllOfClass<APoplarPlayerReplicationInfo>()) {
                 pri->InitializeAugmentations(SDKUtils::GetLastOfClass< UPoplarPlayerClassDefinition>()->AugSet);
             }
-            */
-            /*
             for (UPoplarFrontendGFxMovie* test : SDKUtils::GetAllOfClass<UPoplarFrontendGFxMovie>()) {
-                //std::cout << test->GetFullName() << std::endl;
-                FMessageOfTheDay msg = FMessageOfTheDay();
-                FNewsArticle article = FNewsArticle();
-                article.LearnMoreURL = (const char*)L"https://google.com";
-                article.Summary = (const char*)L"Reborn 1.0";
-                article.Header = (const char*)L"Reborn 1.0";
-                article.Body = (const char*)L"Reborn 1.0 has been almost a year in the making, and no part of Reborn is untouched!\nSave Solus with your friends, battle to the death with your enemies, or just collect shiny gear; the choice is yours!";
-                msg.Article = article;
-                msg.DisplayTime = 0;
-                msg.MessageId = 0x69;
-                msg.bForceFullscreen = true;
-                test->MessagesOfTheDay.push_back(msg);
+                if (test->GetFullName().contains("Default"))
+                    continue;
+
+                std::cout << test->GetFullName() << std::endl;
+
+                FMessageOfTheDay* msg = (FMessageOfTheDay * )EngineLogic::EngineMalloc(sizeof(FMessageOfTheDay));
+                *msg = FMessageOfTheDay();
+                FNewsArticle* article = (FNewsArticle*)EngineLogic::EngineMalloc(sizeof(FNewsArticle));
+                *article = FNewsArticle();
+                article->LearnMoreURL = *MakeFString(L"https://google.com");
+                article->Summary = *MakeFString(L"Reborn 1.0");
+                article->Header = *MakeFString(L"Reborn 1.0");
+                article->Body = *MakeFString(L"Reborn 1.0 has been almost a year in the making, and no part of Reborn is untouched!\nSave Solus with your friends, battle to the death with your enemies, or just collect shiny gear; the choice is yours!");
+                article->FullscreenTextureURL = *MakeFString(L"");
+                article->SmallTextureURL = *MakeFString(L"");
+                msg->Article = *article;
+                msg->DisplayTime = 0;
+                msg->MessageId = 0x69;
+                msg->bForceFullscreen = true;
+                test->MessagesOfTheDay.ArrayData = (FMessageOfTheDay*)EngineLogic::EngineMalloc(sizeof(FMessageOfTheDay));
+                test->MessagesOfTheDay.ArrayCount = 1;
+                test->MessagesOfTheDay.ArrayMax = 1;
+                test->MessagesOfTheDay.ArrayData[0] = *msg;
                 test->CurrentMessageOfTheDayId = 0x69;
-                test->TimedShowNextMessageOfTheDay();
+                //test->TimedShowNextMessageOfTheDay();
 
                 //test->LastCharacterPlayedAs = UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>("PoplarPlayerNameIdentifierDefinition GD_RocketHawk.NameId_RocketHawk");
                 //test->LastCharacterSkinPlayedIn = UObject::FindObject<UPoplarMetaSkinDefinition>("PoplarMetaSkinDefinition GD_RocketHawk.Skins.SkinId_Color005");
             }
-            */
 
-            /*
             FPlayerMetaData serverMeta = FPlayerMetaData();
 
             serverMeta.MetaLevel = 69;
@@ -741,8 +1036,6 @@ void MainThread() {
             SDKUtils::GetLastOfClass< UPoplarCommandMenuDefinition>()->MinCommandRankForGear = 0;
 
             SDKUtils::ListAllOfClass< UPoplarCommandArtifactsGFxMovie>();
-            */
-            /*
             SDKUtils::GetLastOfClass< UPoplarCommandMenuDefinition>()->MinCommandRankForGear = 0;
             FPlayerMetaData serverMeta = FPlayerMetaData();
 
@@ -757,9 +1050,6 @@ void MainThread() {
             res.bRequestSucceeded = true;
 
             SDKUtils::GetLastOfClass < UPoplarOnlineClientPlayerService >()->CachedPlayerMetaData.push_back(serverMeta);
-            */
-
-            /*
             UPoplarMetagameInventory* cached = SDKUtils::GetLastOfClass< UPoplarMetagameInventory>();
 
             FPlatformUserId id = SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId();
@@ -813,11 +1103,8 @@ void MainThread() {
                 entitle.Entitlements.push_back(item);
             }
             
-
+            cached->OnTransactionRefunded(id, 0, trans, entitle);
             cached->OnReceivePlayerEntitlementDataFromHydra(id, 0);
-            */
-            //cached->OnTransactionRefunded(id, 0, trans, entitle);
-            /*
             UPoplarCommandArtifactsGFxMovie* cachedLOL = SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>();
 
             std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
@@ -831,22 +1118,25 @@ void MainThread() {
 
                 i++;
 
-                FReplicatedPerkItem* item = (FReplicatedPerkItem*)EngineLogic::EngineMalloc(sizeof(FReplicatedPerkItem));
+                if (i > 5)
+                    continue;
 
-                item->PerkFunction = perk;
-                item->ItemLevel = 1;
-                item->Rarity = 1;
-                item->bActive = true;
-                item->bCanUse = true;
-                item->PlayerID = FUniqueNetId();
-                item->ApolloJSON = L"{}";
-                item->EntitlementIndex = i;
-                item->MetaID = perk->MetaContentID;
-                item->AssetKey = perk->AssetTrackerKey;
-                item->ItemData = FPointer();
-                item->ItemData.Dummy = 0x0;
+                FReplicatedPerkItem item = FReplicatedPerkItem();
 
-                cachedLOL->PerkBank.push_back(*item);
+                item.PerkFunction = perk;
+                item.ItemLevel = 1;
+                item.Rarity = 1;
+                item.bActive = true;
+                item.bCanUse = true;
+                //item.PlayerID = FUniqueNetId();
+                //item.ApolloJSON = L"{}";
+                item.EntitlementIndex = i;
+                item.MetaID = perk->MetaContentID;
+                item.AssetKey = perk->AssetTrackerKey;
+                item.ItemData = FPointer();
+                item.ItemData.Dummy = (__int64)0;
+
+                cachedLOL->PerkBank.push_back(item);
             }
 
             std::cout << i << std::endl;
@@ -854,12 +1144,14 @@ void MainThread() {
             std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
 
             std::cout << "Control passed back to game" << std::endl;
-
             cachedLOL->bBankNeedsMetagameUpdate = false;
             cachedLOL->SelectedBankPerkIndex = 0;
+            cachedLOL->ArtifactInitState = ECommandArtifactInitializingState::ARTIFACTINITSTATE_END;
+            cachedLOL->ArtifactPageState = ECommandArtifactPageState::ARTIFACTSTATE_Loadouts;
+            cachedLOL->ArtifactRequestState = ECommandArtifactPageRequestState::ARTIFACTREQUESTSTATE_NoRequest;
             //cachedLOL->MaxPopulatingBankPerkIndex = SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size();
-            */
-            /*
+
+            
                         UPoplarCommandBattlebornGFxMovie* commandMovie = SDKUtils::GetLastOfClass< UPoplarCommandBattlebornGFxMovie>();
 
                         for (UPoplarPlayerNameIdentifierDefinition* character : SDKUtils::GetAllOfClass< UPoplarPlayerNameIdentifierDefinition>()) {
@@ -883,25 +1175,152 @@ void MainThread() {
 
 
                         std::cout << commandMovie->CharacterCells->GetFullName() << std::endl;
-                        */
+
+
+UPoplarCommandArtifactsGFxMovie* cachedLOL = SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>();
+
+std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
+
+int i = 0;
+
+std::vector<UPoplarPerkFunction*> perkfunctions = SDKUtils::GetAllOfClass<UPoplarPerkFunction>();
+std::vector< FReplicatedPerkItem*> owo = std::vector< FReplicatedPerkItem*>();
+
+SDKUtils::GetLastOfClass< UPoplarCommandMenuDefinition>()->MinCommandRankForGear = 0;
+
+for (UPoplarPerkFunction* perk : perkfunctions) {
+    if (perk->GetFullName().contains("Default")) {
+        continue;
+    }
+
+    if (i >= 100) {
+        continue;
+    }
+
+    i++;
+
+    FReplicatedPerkItem* item = (FReplicatedPerkItem*)EngineLogic::EngineMalloc(sizeof(FReplicatedPerkItem));
+
+    *item = FReplicatedPerkItem();
+
+    owo.push_back(item);
+    
+    item->PerkFunction = perk;
+    item->AssetKey.ArrayData = perk->AssetTrackerKey.ArrayData;
+    item->AssetKey.ArrayCount = perk->AssetTrackerKey.ArrayCount;
+    item->AssetKey.ArrayMax = perk->AssetTrackerKey.ArrayMax;
+    //item->AssetKey = perk->AssetTrackerKey;
+
+    item->ItemLevel = 1;
+    item->Rarity = 1;
+    
+    
+    item->bActive = true;
+    item->bCanUse = true;
+    item->PlayerID = SDKUtils::GetLastOfClass<APoplarPlayerController>()->PlayerReplicationInfo->UniqueId;
+    item->EntitlementIndex = i;
+    
+    item->Wearable = nullptr;
+
+    
+
+    //cachedLOL->PerkBank.push_back(*item);
+}
+
+cachedLOL->PerkBank.ArrayData = (FReplicatedPerkItem*)EngineLogic::EngineMalloc(sizeof(FReplicatedPerkItem) * owo.size());
+cachedLOL->PerkBank.ArrayCount = owo.size();
+cachedLOL->PerkBank.ArrayMax = owo.size();
+
+for (int i = 0; i < owo.size(); i++) {
+    cachedLOL->PerkBank.ArrayData[i] = *owo[i];
+}
+
+std::cout << i << std::endl;
+
+std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
+
+SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->MaxPopulatingBankPerkIndex = 100;
+SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->CurrentPopulatingBankPerkIndex = 0;
+
+std::cout << "Control passed back to game" << std::endl;
+FPlayerTransactions transactions = FPlayerTransactions();
+
+FPlayerEntitlementData entitlements = FPlayerEntitlementData();
+
+entitlements.PlayerID = SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId();
+entitlements.ReputationPoints = 420;
+entitlements.EarnedCurrency = 69;
+entitlements.EarnedCurrencyRate = 621;
+entitlements.PerkBankMaxSize = 6969;
+entitlements.RefundTokens = 5;
+
+
+SDKUtils::GetLastOfClass< UPoplarMetagameInventory>()->OnTransactionRefunded(SDKUtils::GetLastOfClass<APoplarPlayerController>()->GetMyUserId(), 0, transactions, entitlements);
+
+//cachedLOL->bBankNeedsMetagameUpdate = false;
+//cachedLOL->SelectedBankPerkIndex = 1;
+//cachedLOL->BankPage = FPointer();
+//cachedLOL->BankPage.Dummy = 0x0;
 
 //EngineLogic::DontPauseOnLossOfFocus();
 //EngineLogic::ExecConsoleCommand(L"open Snowdrift_P?bTournamentMode=1");
 
+for (FUIBreadcrumbEntry val : SDKUtils::GetLastOfClass<UWillowProfile>()->UIBreadcrumbs) {
+    //std::cout << val.UIBreadcrumbKey.ToString() << std::endl;
+
+    for (UPoplarPerkFunction* perk : SDKUtils::GetAllOfClass<UPoplarPerkFunction>()) {
+        //std::cout << perk->AssetTrackerKey.ToString() << std::endl;
+
+        if (perk->AssetTrackerKey.ToString()._Equal(val.UIBreadcrumbKey.ToString())) {
+            std::cout << perk->DisplayName.ToString() << std::endl;
+        }
+    }
+}
+FHttpParameters* params = (FHttpParameters * )EngineLogic::EngineMalloc(sizeof(FHttpParameters));
+
+*params = FHttpParameters();
+
+params->ServiceConfiguration = SDKUtils::GetLastOfClass<USparkServiceConfiguration>();
+params->bResponseDesired = true;
+params->Method = 1;
+
+TArray<uint8_t>* data = (TArray<uint8_t>*)EngineLogic::EngineMalloc(sizeof(TArray<uint8_t>));
+
+*data = TArray<uint8_t>();
+
+FScriptDelegate* del = (FScriptDelegate*)EngineLogic::EngineMalloc(sizeof(FScriptDelegate));
+
+*del = FScriptDelegate();
+
+SDKUtils::GetLastOfClass<UPoplarSpark>()->IssueSparkRequest(L"http://127.0.0.1:3000", *del, *params, *data);
+
 while (GetAsyncKeyState(VK_F5)) {
 
 }
+        }
+        UPoplarCommandMenuDefinition* xd = SDKUtils::GetLastOfClass< UPoplarCommandMenuDefinition>();
+
+        xd->MinCommandRankForGear = 0;
+        if (GetAsyncKeyState(VK_F1)) {
+            for (UPoplarFrontendGFxMovie* test : SDKUtils::GetAllOfClass<UPoplarFrontendGFxMovie>()) {
+
+                test->MessagesOfTheDay.ArrayData = nullptr;
+                test->MessagesOfTheDay.ArrayCount = 0;
+                test->MessagesOfTheDay.ArrayMax = 0;
+            }
+
+            while (GetAsyncKeyState(VK_F1)) {
+
+            }
         }
 
         if (GetAsyncKeyState(VK_F6)) {
             //
             EngineLogic::DontPauseOnLossOfFocus();
             listening = true;
-            EngineLogic::ExecConsoleCommand(L"open Snowdrift_P");
+            EngineLogic::ExecConsoleCommand(L"open Snowdrift_P?bTournamentMode=1");
 
-            Sleep(4 * 1000);
-
-            ServerNetworking::InitListen();
+            Globals::amServer = true;
 
             while (GetAsyncKeyState(VK_F6)) {
 
@@ -911,7 +1330,7 @@ while (GetAsyncKeyState(VK_F5)) {
         if (GetAsyncKeyState(VK_F7) && !listening && !connected) {
             connected = true;
             EngineLogic::DontPauseOnLossOfFocus();
-            ClientNetworking::JoinServer(L"174.55.86.128:6969");
+            ClientNetworking::JoinServer(L"127.0.0.1:6969");
 
             while (GetAsyncKeyState(VK_F7)) {
 
@@ -919,15 +1338,55 @@ while (GetAsyncKeyState(VK_F5)) {
         }
 
         if (GetAsyncKeyState(VK_F8)) {
-            if (!listening) {
+            if (Globals::amServer) {
+                
+                [PE] PoplarPlayerController Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerController - Function PoplarGame.PoplarPlayerController.AfterReceivedPlayerWaitForCharacterLoad
+[PE] PoplarPlayerReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerReplicationInfo - Function WillowGame.WillowPlayerReplicationInfo.RunOnceClientInitialize
+[PE] PoplarStatReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarStatReplicationInfo - Function PoplarGame.PoplarStatReplicationInfo.ResetTrainingStatsListenersDelayed
+[PE] PoplarHUD Wishbone_P.TheWorld.PersistentLevel.PoplarHUD - Function WillowGame.WillowHUD.OpenHUDMovies
+[PE] PoplarMenuSubtitlesGFxMovie Transient.PoplarMenuSubtitlesGFxMovie - Function GearboxFramework.GearboxGFxMovie.extCacheClip
+[PE] PoplarMenuSubtitlesGFxMovie Transient.PoplarMenuSubtitlesGFxMovie - Function GearboxFramework.GearboxGFxMovie.extOnClipLoaded
+                for (APoplarCharacterSelectManager* acs : SDKUtils::GetAllOfClass< APoplarCharacterSelectManager>()) {
+                    std::cout << acs->GetFullName() << std::endl;
+                    acs->NumberOfExpectatedPlayerConnections = 2;
+                    acs->bWaitForStandaloneEntitlements = false;
+                    acs->Teams[0].NumExpectedPlayers = 1;
+                    acs->Teams[1].NumExpectedPlayers = 1;
+                    acs->Teams[1].Players[0].bHasReceivedEntitlements = true;
+                    acs->Teams[1].Players[0].bCanSelect = true;
+                }
                 
             }
+        }
 
-            while (GetAsyncKeyState(VK_F8)) {
+        if (GetAsyncKeyState(VK_F9)) {
+            if (Globals::amServer) {
+                                for (APoplarGameReplicationInfo* pri : SDKUtils::GetAllOfClass< APoplarGameReplicationInfo>()) {
+                    std::cout << pri->GetFullName() << std::endl;
+                    FMatchStateData currentMatchState = FMatchStateData();
+                    currentMatchState.bTournamentMode = 1;
+                    currentMatchState.State = (int)EMatchState::MatchState_CharacterSelect;
+                    FMatchStateData oldMatchState = FMatchStateData();
+                    oldMatchState.bTournamentMode = 1;
+                    oldMatchState.State = (int)EMatchState::MatchState_Initial;
+                    pri->CurrentMatchState = currentMatchState;
+                    pri->OnRep_CurrentMatchState(oldMatchState);
+                }
+                for (APoplarPlayerController* pri : SDKUtils::GetAllOfClass< APoplarPlayerController>()) {
+                    std::cout << pri->GetStateName().InstanceNumber << std::endl;
+                    if (pri->PoplarPSI) {
+                        std::cout << pri->GetStateName().ToString() << std::endl;
+                    }
+                }
+            }
+
+            while (GetAsyncKeyState(VK_F9)) {
 
             }
         }
+
     }
+    */
 }
 
 BOOL APIENTRY DllMain( HMODULE hModule,
