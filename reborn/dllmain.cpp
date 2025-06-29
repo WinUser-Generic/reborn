@@ -47,6 +47,8 @@ namespace Globals {
 
     bool amServer = false;
 
+    float timeTillStartupMassacre = 0.0f;
+
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
     }
@@ -421,7 +423,7 @@ namespace Hooks{
             Globals::connections.push_back(connection);
             Globals::sentTemporaries.push_back(std::make_pair(connection, new std::vector<AActor*>()));
 
-            if (numPlayersJoined == 2) {
+            if (numPlayersJoined == Settings::NumPlayersToStart) {
                 SDKUtils::GetLastOfClass<APoplarGameInfo>()->StartHumans();
 
                 for (UNetConnection* connection2 : Globals::connections) {
@@ -450,9 +452,9 @@ namespace Hooks{
                     pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
 
                     //pc->ClientGotoState(FName(), FName());
-
-                    
                 }
+
+                Globals::timeTillStartupMassacre = 5.0f;
             }
         }
         else if (message == 0xf) {
@@ -464,6 +466,18 @@ namespace Hooks{
 
     void GameEngineTickHook(UGameEngine* engine, float DeltaTime) {
         GameEngineTick.call<void>(engine, DeltaTime);
+
+        if (Globals::timeTillStartupMassacre > 0.0f) {
+            Globals::timeTillStartupMassacre -= DeltaTime;
+
+            if (Globals::timeTillStartupMassacre <= 0.0f) {
+                std::cout << "[GAME] Committing startup massacre to sync everyone up!" << std::endl;
+                for (UNetConnection* Connection : Globals::connections) {
+                    std::cout << ((APoplarPlayerController*)Connection->Actor)->MyPoplarPRI->CharacterNameIdDef->GetFullName() << std::endl;
+                    ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
+                }
+            }
+        }
 
         if (Globals::netDriver) {
             Globals::time += DeltaTime;
@@ -533,6 +547,10 @@ namespace Hooks{
             //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         //}
 
+        if (function->GetFullName().contains("Aug")) { //
+            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        }
+
         /*
         if (function->GetFullName().contains("FromHydra")) {
             reinterpret_cast<UPoplarMetagameInventory_execOnReceivePlayerMetaDataFromHydra_Params*>(params)->ServiceResult = 0;
@@ -563,27 +581,15 @@ namespace Hooks{
         if (!characterPossessionUFunction)
             characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
 
-        /*
-        if (Globals::shouldPopRPCOnCharacterPossession && function == characterPossessionUFunction && !Globals::netDriver) {
-            Globals::shouldPopRPCOnCharacterPossession = false;
-
-            ClientNetworking::ForceAlwaysNetReady();
-
-            FString* str = (FString*)EngineLogic::EngineMalloc(sizeof(FString));
-
-            str->ArrayData = Globals::characterString.c_str();
-            str->ArrayCount = wcslen(Globals::characterString.c_str()) + 1;
-            str->ArrayMax = wcslen(Globals::characterString.c_str()) + 1;
-
-            APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
-
-            ppc->eventServerProcessConvolve(*str, 0);
-
-            std::thread t(SetupAugmentsThread, ppc);
-
-            t.detach();
+        if (function == characterPossessionUFunction) {
+            APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
+            if (ppc->MyPoplarPRI && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
+                ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+            }
+            else {
+                std::cout << "[GAME] Failed to setup Augments!" << std::endl;
+            }
         }
-        */
 
         UFunction* confirmCharacterSelectionUFunction = nullptr;
 
@@ -923,10 +929,6 @@ void MainThread() {
         while (true) {
             while (!GetAsyncKeyState(VK_F7)) {
 
-            }
-
-            for (UNetConnection* Connection : Globals::connections) {
-                ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
             }
 
             while (GetAsyncKeyState(VK_F7)) {
