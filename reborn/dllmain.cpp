@@ -257,7 +257,7 @@ namespace ServerNetworking {
             if(!(*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1))
                 continue;
 
-            if (connection->Actor->PendingAdjustment.TimeStamp > 0.0) {
+            if (connection->Actor && connection->Actor->PendingAdjustment.TimeStamp > 0.0) {
                 connection->Actor->eventSendClientAdjustment();
             }
 
@@ -414,35 +414,46 @@ namespace Hooks{
         else if (message == 0x9) {
             printf("[NETWORKING] Spawning a new player!\n");
 
-            UWorld* theWorld = Globals::GetGWorld();
-            FURL theURL = FURL();
+            static int numPlayersJoined = 0;
 
-            FUniqueNetId netID = FUniqueNetId();
-
-            netID.bHasValue = true;
-
-            static uint8_t id = 0x0;
-
-            id++;
-
-            netID.RawId[0] = id;
-
-            FString err = FString();
-
-            APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(FString(), FString(), netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
-
-            connection->Actor = pc;
-
-            pc->Player = connection;
-
-            pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
-
-            //pc->ClientGotoState(FName(), FName());
+            numPlayersJoined++;
 
             Globals::connections.push_back(connection);
             Globals::sentTemporaries.push_back(std::make_pair(connection, new std::vector<AActor*>()));
 
-            SDKUtils::GetLastOfClass<AGameInfo>()->StartHumans();
+            if (numPlayersJoined == 2) {
+                SDKUtils::GetLastOfClass<APoplarGameInfo>()->StartHumans();
+
+                for (UNetConnection* connection2 : Globals::connections) {
+
+                    UWorld* theWorld = Globals::GetGWorld();
+                    FURL theURL = FURL();
+
+                    FUniqueNetId netID = FUniqueNetId();
+
+                    netID.bHasValue = true;
+
+                    static uint8_t id = 0x0;
+
+                    id++;
+
+                    netID.RawId[0] = id;
+
+                    FString err = FString();
+
+                    APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(FString(), FString(), netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
+
+                    connection2->Actor = pc;
+
+                    pc->Player = connection2;
+
+                    pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
+
+                    //pc->ClientGotoState(FName(), FName());
+
+                    
+                }
+            }
         }
         else if (message == 0xf) {
             printf("[NETWORKING] New player ack'd!\n");
@@ -481,7 +492,7 @@ namespace Hooks{
         std::cout << "Startup Complete!" << std::endl;
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
         SDKUtils::GetLastOfClass<UPoplarPressStartGFxMovie>()->ContinueToMenu();
-        EngineLogic::ExecConsoleCommand(L"open 127.0.0.1");
+        //EngineLogic::ExecConsoleCommand(L"open 127.0.0.1");
     }
 
     void MainPanelClickedHook(uint32_t PanelId) {
@@ -860,7 +871,6 @@ namespace Init {
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
-            
         }
 
         Hooks::ProcessEvent = safetyhook::create_inline((void*)(Globals::baseAddress + 0x109ca0), &Hooks::ProcessEventHook);
@@ -915,11 +925,9 @@ void MainThread() {
 
             }
 
-            std::cout << SDKUtils::GetLastOfClass< APoplarGameInfo>()->CharacterSelectStyleOption << std::endl;
-            SDKUtils::GetLastOfClass< APoplarGameReplicationInfo>()->CurrentMatchState.bTournamentMode = true;
-            std::cout << SDKUtils::GetLastOfClass< APoplarGameReplicationInfo>()->CurrentMatchState.State << std::endl;
-            SDKUtils::GetLastOfClass< APoplarGameReplicationInfo>()->CurrentMatchState.State = 2;
-            SDKUtils::GetLastOfClass< APoplarGameReplicationInfo>()->OnRep_CurrentMatchState(FMatchStateData());
+            for (UNetConnection* Connection : Globals::connections) {
+                ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
+            }
 
             while (GetAsyncKeyState(VK_F7)) {
 
