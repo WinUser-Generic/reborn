@@ -547,8 +547,20 @@ namespace Hooks{
             //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         //}
 
-        if (function->GetFullName().contains("Aug")) { //
+        if (function->GetFullName().contains("Helix")) { //
+            ProcessEvent.call<void>(object, function, params);
+
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+            APoplarPlayerReplicationInfo* ppri = reinterpret_cast<APoplarPlayerReplicationInfo*>(object);
+
+            for (FAugCategoryInstance& cat : ppri->Augs.AllCategories) {
+                if (cat.CategoryIsUnlocked) {
+                    std::cout << "FUCKY" << std::endl;
+                    cat.Augs[0].ClientPurchaseStatus = 2;
+                }
+            }
+
+            return;
         }
 
         /*
@@ -575,6 +587,28 @@ namespace Hooks{
         */
 
         //PoplarPlayerReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerReplicationInfo - Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection
+
+        UFunction* serverTryBuyNextTierUFunction = nullptr;
+
+        if (!serverTryBuyNextTierUFunction)
+            serverTryBuyNextTierUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerReplicationInfo.ServerTryBuyNextTierForAugmentation");
+
+        if (function == serverTryBuyNextTierUFunction) {
+            APoplarPlayerReplicationInfo* ppri = reinterpret_cast<APoplarPlayerReplicationInfo*>(object);
+
+            UPoplarAugDefinition* def = ((APoplarPlayerReplicationInfo_eventServerTryBuyNextTierForAugmentation_Params*)(params))->AugDef;
+
+            for (FAugCategoryInstance &cat : ppri->Augs.AllCategories) {
+                if (cat.Augs[0].AugDef == def) {
+                    cat.Augs[0].ClientPurchaseStatus = 2;
+                    break;
+                }
+                if (cat.Augs[1].AugDef == def) {
+                    cat.Augs[1].ClientPurchaseStatus = 2;
+                    break;
+                }
+            }
+        }
 
         UFunction* characterPossessionUFunction = nullptr;
 
