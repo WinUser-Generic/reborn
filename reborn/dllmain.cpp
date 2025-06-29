@@ -99,6 +99,28 @@ namespace SDKUtils {
     }
 }
 
+namespace GameUtils {
+    EPerkRarity RarityStringToRarity(FString rarityString) {
+        std::string normalRarityString = rarityString.ToString();
+
+        if (normalRarityString.contains("VeryRare")) {
+            return EPerkRarity::PERKRARITY_VeryRare;
+        }
+        else if (normalRarityString.contains("Uncommon")) {
+            return EPerkRarity::PERKRARITY_Uncommon;
+        }
+        else if (normalRarityString.contains("Rare")) {
+            return EPerkRarity::PERKRARITY_Rare;
+        }
+        else if (normalRarityString.contains("Common")) {
+            return EPerkRarity::PERKRARITY_Common;
+        }
+        else if (normalRarityString.contains("Legendary")) {
+            return EPerkRarity::PERKRARITY_Legendary;
+        }
+    }
+}
+
 namespace EngineLogic {
     void ExecConsoleCommand(const wchar_t* command) {
         reinterpret_cast<void* (*)(uintptr_t, const wchar_t*, uintptr_t)>(Globals::baseAddress + 0x01fca00)((__int64)((*GObjects)[0]) + 0x25ebde8, command, 0);
@@ -647,6 +669,16 @@ namespace Hooks{
                 for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
                     if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
                         ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
+                    }
+                }
+
+                // TODO: Client-auth Gear Status
+                for (int i = 0; i < 1; i++) {
+                    if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
+                        ppc->MyPoplarPRI->Perks[i].PerkFunction = SDKUtils::GetLastOfClass<UPoplarPerkFunction>();
+                        ppc->MyPoplarPRI->Perks[i].ItemLevel = 0;
+                        ppc->MyPoplarPRI->Perks[i].Rarity = (int32_t)GameUtils::RarityStringToRarity(SDKUtils::GetLastOfClass<UPoplarPerkFunction>()->RarityString);
+                        ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
                     }
                 }
             }
