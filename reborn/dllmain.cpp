@@ -49,6 +49,10 @@ namespace Globals {
 
     float timeTillStartupMassacre = 0.0f;
 
+    std::vector<int> AugStatus = std::vector<int>();
+
+    bool hasDoneInitialTravel = false;
+
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
     }
@@ -492,41 +496,6 @@ namespace Hooks{
                 ServerNetworking::TickNetServer(Globals::netDriver);
             }
         }
-
-        if (Globals::amServer) {
-            for (UNetConnection* connection: Globals::connections) {
-                if (connection->Actor) {
-                    APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(connection->Actor);
-
-                    if (ppc->bHelixMenuOpen) {
-                        APoplarPlayerReplicationInfo* ppri = ppc->MyPoplarPRI;
-
-                        for (FAugCategoryInstance& cat : ppri->Augs.AllCategories) {
-                            if (true) {
-                                std::cout << "FUCKY" << std::endl;
-                                cat.Augs[0].ClientPurchaseStatus = 2;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else {
-            if (engine->GamePlayers.ArrayCount > 0) {
-                if (engine->GamePlayers[0]->Actor) {
-                    APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(engine->GamePlayers[0]->Actor);
-
-                    APoplarPlayerReplicationInfo* ppri = ppc->MyPoplarPRI;
-
-                    for (FAugCategoryInstance& cat : ppri->Augs.AllCategories) {
-                        if (true) {
-                            std::cout << "FUCKY" << std::endl;
-                            cat.Augs[0].ClientPurchaseStatus = 2;
-                        }
-                    }
-                }
-            }
-        }
     }
 
     SafetyHookInline MainMenu;
@@ -582,16 +551,31 @@ namespace Hooks{
             //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         //}
 
-        if (function->GetFullName().contains("Helix")) { //
+        UFunction* updateHelixMenuStateUFunction = nullptr;
+
+        if (!updateHelixMenuStateUFunction)
+            updateHelixMenuStateUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerStateInfo.UpdateHelixMenuState");
+
+        if (function == updateHelixMenuStateUFunction) {
             ProcessEvent.call<void>(object, function, params);
 
-            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
-            APoplarPlayerReplicationInfo* ppri = reinterpret_cast<APoplarPlayerReplicationInfo*>(object);
+            APoplarPlayerStateInfo* ppsi = reinterpret_cast<APoplarPlayerStateInfo*>(object);
 
-            for (FAugCategoryInstance& cat : ppri->Augs.AllCategories) {
-                if (true) {
-                    std::cout << "FUCKY" << std::endl;
-                    cat.Augs[0].ClientPurchaseStatus = 2;
+            for (int i = 0; i < Globals::AugStatus.size(); i++) { //
+                int status = Globals::AugStatus[i];
+
+                switch (status) {
+                case 0:
+                case 1:
+                    ppsi->PoplarPRI->Augs.AllCategories[i].Augs[status].ClientPurchaseStatus = 2;
+                    break;
+                case 2:
+                    if (ppsi->PoplarPRI->Augs.AllCategories[i].Mutation.AugDef) {
+                        ppsi->PoplarPRI->Augs.AllCategories[i].Mutation.ClientPurchaseStatus = 2;
+                    }
+                    break;
+                default:
+                    break;
                 }
             }
 
@@ -635,11 +619,15 @@ namespace Hooks{
 
             for (FAugCategoryInstance &cat : ppri->Augs.AllCategories) {
                 if (cat.Augs[0].AugDef == def) {
-                    cat.Augs[0].ClientPurchaseStatus = 2;
+                    Globals::AugStatus.push_back(0);
                     break;
                 }
                 if (cat.Augs[1].AugDef == def) {
-                    cat.Augs[1].ClientPurchaseStatus = 2;
+                    Globals::AugStatus.push_back(1);
+                    break;
+                }
+                if (cat.Mutation.AugDef == def) {
+                    Globals::AugStatus.push_back(2);
                     break;
                 }
             }
@@ -902,11 +890,15 @@ namespace Hooks{
     SafetyHookInline ConsoleCommand;
     
     bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3) {
-        a2 = Settings::MapString;
+        if (Globals::amServer && !Globals::hasDoneInitialTravel) {
+            a2 = Settings::MapString;
+        }
+
+        if (std::wstring(a2).contains(L"open") || std::wstring(a2).contains(L"disconnect")) {
+            Globals::AugStatus.clear();
+        }
 
         bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
-
-        ConsoleCommand = {};
 
         return ret;
     }
@@ -936,7 +928,7 @@ namespace Init {
 
     void Hooks() {
         if (Globals::amServer) {
-            Hooks::ConsoleCommand = safetyhook::create_inline((void*)(Globals::baseAddress + 0x01fca00), &Hooks::ConsoleCommandHook);
+            
             Hooks::DestroyActor = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3EF070), &Hooks::DestroyActorHook);
             Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x16EC4D0), &Hooks::JustDoNothingHook);
             Hooks::JustDoNothing2 = safetyhook::create_inline((void*)(Globals::baseAddress + 0xE5F320), &Hooks::JustDoNothingHook);
@@ -948,8 +940,8 @@ namespace Init {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
         }
 
+        Hooks::ConsoleCommand = safetyhook::create_inline((void*)(Globals::baseAddress + 0x01fca00), &Hooks::ConsoleCommandHook);
         Hooks::ProcessEvent = safetyhook::create_inline((void*)(Globals::baseAddress + 0x109ca0), &Hooks::ProcessEventHook);
-        
         Hooks::ProcessRemoteFunction = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0728fd0), &Hooks::ProcessRemoteFunctionHook);
         
         //Hooks::MakeHTTPRequest = safetyhook::create_inline((void*)(Globals::baseAddress + 0xD61DE0), &Hooks::MakeHTTPRequestHook);
