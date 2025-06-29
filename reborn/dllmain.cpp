@@ -642,6 +642,13 @@ namespace Hooks{
             APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
             if (ppc->MyPoplarPRI && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
                 ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                // TODO: Client-auth Mutation Status
+                for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                    if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
+                        ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
+                    }
+                }
             }
             else {
                 std::cout << "[GAME] Failed to setup Augments!" << std::endl;
@@ -891,6 +898,7 @@ namespace Hooks{
     
     bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3) {
         if (Globals::amServer && !Globals::hasDoneInitialTravel) {
+            Globals::hasDoneInitialTravel = true;
             a2 = Settings::MapString;
         }
 
