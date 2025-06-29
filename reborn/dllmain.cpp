@@ -467,7 +467,7 @@ namespace Hooks{
     void GameEngineTickHook(UGameEngine* engine, float DeltaTime) {
         GameEngineTick.call<void>(engine, DeltaTime);
 
-        if (Globals::timeTillStartupMassacre > 0.0f) {
+        if (Globals::netDriver && Globals::timeTillStartupMassacre > 0.0f) {
             Globals::timeTillStartupMassacre -= DeltaTime;
 
             if (Globals::timeTillStartupMassacre <= 0.0f) {
@@ -490,6 +490,41 @@ namespace Hooks{
                 time = 0.0f;
 
                 ServerNetworking::TickNetServer(Globals::netDriver);
+            }
+        }
+
+        if (Globals::amServer) {
+            for (UNetConnection* connection: Globals::connections) {
+                if (connection->Actor) {
+                    APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(connection->Actor);
+
+                    if (ppc->bHelixMenuOpen) {
+                        APoplarPlayerReplicationInfo* ppri = ppc->MyPoplarPRI;
+
+                        for (FAugCategoryInstance& cat : ppri->Augs.AllCategories) {
+                            if (true) {
+                                std::cout << "FUCKY" << std::endl;
+                                cat.Augs[0].ClientPurchaseStatus = 2;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            if (engine->GamePlayers.ArrayCount > 0) {
+                if (engine->GamePlayers[0]->Actor) {
+                    APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(engine->GamePlayers[0]->Actor);
+
+                    APoplarPlayerReplicationInfo* ppri = ppc->MyPoplarPRI;
+
+                    for (FAugCategoryInstance& cat : ppri->Augs.AllCategories) {
+                        if (true) {
+                            std::cout << "FUCKY" << std::endl;
+                            cat.Augs[0].ClientPurchaseStatus = 2;
+                        }
+                    }
+                }
             }
         }
     }
@@ -554,7 +589,7 @@ namespace Hooks{
             APoplarPlayerReplicationInfo* ppri = reinterpret_cast<APoplarPlayerReplicationInfo*>(object);
 
             for (FAugCategoryInstance& cat : ppri->Augs.AllCategories) {
-                if (cat.CategoryIsUnlocked) {
+                if (true) {
                     std::cout << "FUCKY" << std::endl;
                     cat.Augs[0].ClientPurchaseStatus = 2;
                 }
