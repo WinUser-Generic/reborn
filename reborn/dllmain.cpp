@@ -19,7 +19,7 @@ namespace Settings {
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Snowblind_P"; //
+    const wchar_t* MapString = L"open Caverns_P"; //
 }
 
 namespace Globals {
@@ -47,11 +47,15 @@ namespace Globals {
 
     bool amServer = false;
 
+    bool hasStartupMassacreHappened = false;
+
     float timeTillStartupMassacre = 0.0f;
 
     std::vector<int> AugStatus = std::vector<int>();
 
     bool hasDoneInitialTravel = false;
+
+    std::vector<APoplarPlayerController*> ppcsWeSetupAugsFor = std::vector<APoplarPlayerController*>();
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
@@ -100,23 +104,27 @@ namespace SDKUtils {
 }
 
 namespace GameUtils {
-    EPerkRarity RarityStringToRarity(FString rarityString) {
-        std::string normalRarityString = rarityString.ToString();
+    int32_t RarityStringToRarity(std::string rarityString) {
+        std::string normalRarityString = rarityString;
 
         if (normalRarityString.contains("VeryRare")) {
-            return EPerkRarity::PERKRARITY_VeryRare;
+            return 4;
         }
         else if (normalRarityString.contains("Uncommon")) {
-            return EPerkRarity::PERKRARITY_Uncommon;
+            return 2;
         }
         else if (normalRarityString.contains("Rare")) {
-            return EPerkRarity::PERKRARITY_Rare;
+            return 3;
         }
         else if (normalRarityString.contains("Common")) {
-            return EPerkRarity::PERKRARITY_Common;
+            return 1;
         }
         else if (normalRarityString.contains("Legendary")) {
-            return EPerkRarity::PERKRARITY_Legendary;
+            return 5;
+        }
+        else {
+            std::cout << "Unrecognized Rarity: " << normalRarityString << std::endl;
+            return 5;
         }
     }
 }
@@ -494,13 +502,30 @@ namespace Hooks{
         GameEngineTick.call<void>(engine, DeltaTime);
 
         if (Globals::netDriver && Globals::timeTillStartupMassacre > 0.0f) {
-            Globals::timeTillStartupMassacre -= DeltaTime;
+            bool tickTheDoomTimer = true;
+
+            for (UNetConnection* Connection : Globals::connections) {
+                if (((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) {
+                    tickTheDoomTimer = false;
+                    break;
+                }
+            }
+
+            if (tickTheDoomTimer) {
+                Globals::timeTillStartupMassacre -= DeltaTime;
+            }
 
             if (Globals::timeTillStartupMassacre <= 0.0f) {
+                Globals::hasStartupMassacreHappened = true;
+
                 std::cout << "[GAME] Committing startup massacre to sync everyone up!" << std::endl;
                 for (UNetConnection* Connection : Globals::connections) {
-                    std::cout << ((APoplarPlayerController*)Connection->Actor)->MyPoplarPRI->CharacterNameIdDef->GetFullName() << std::endl;
+                    if(Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn)
                     ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
+
+                    if (((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
+                        ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
+                    }
                 }
             }
         }
@@ -532,7 +557,7 @@ namespace Hooks{
         std::cout << "Startup Complete!" << std::endl;
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
         SDKUtils::GetLastOfClass<UPoplarPressStartGFxMovie>()->ContinueToMenu();
-        //EngineLogic::ExecConsoleCommand(L"open 127.0.0.1");
+        EngineLogic::ExecConsoleCommand(L"open 71.207.75.31");
     }
 
     void MainPanelClickedHook(uint32_t PanelId) {
@@ -569,9 +594,11 @@ namespace Hooks{
     }
 
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
-        //if (!function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Move")) { //
-            //printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
-        //}
+        /*
+        if (!function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Move")) {
+            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        }
+        */
 
         UFunction* updateHelixMenuStateUFunction = nullptr;
 
@@ -663,22 +690,90 @@ namespace Hooks{
         if (function == characterPossessionUFunction) {
             APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
             if (ppc->MyPoplarPRI && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
-                ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
-                // TODO: Client-auth Mutation Status
-                for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                    if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
-                        ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
-                    }
-                }
-
                 // TODO: Client-auth Gear Status
-                for (int i = 0; i < 1; i++) {
-                    if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
-                        ppc->MyPoplarPRI->Perks[i].PerkFunction = SDKUtils::GetLastOfClass<UPoplarPerkFunction>();
-                        ppc->MyPoplarPRI->Perks[i].ItemLevel = 0;
-                        ppc->MyPoplarPRI->Perks[i].Rarity = (int32_t)GameUtils::RarityStringToRarity(SDKUtils::GetLastOfClass<UPoplarPerkFunction>()->RarityString);
-                        ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
+                if(Globals::amServer){
+                    bool alreadySetup = false;
+                    for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
+                        if (cmpPPC == ppc) {
+                            alreadySetup = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadySetup) {
+                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
+
+                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                        // TODO: Client-auth Mutation Status
+                        for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                            if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
+                                ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
+                            }
+                        }
+
+                        for (int i = 0; i < 3; i++) {
+                            if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
+                                if (i == 0) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER");
+                                }
+                                if (i == 1) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG");
+                                }
+                                if (i == 2) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT");
+                                }
+
+                                ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
+                                ppc->MyPoplarPRI->Perks[i].bActive = 1;
+                                ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
+                                ppc->MyPoplarPRI->Perks[i].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
+                                //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
+                            }
+                        }
+                    }
+
+                }
+                else {
+                    bool alreadySetup = false;
+                    for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
+                        if (cmpPPC == ppc) {
+                            alreadySetup = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadySetup) {
+                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
+
+                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                        // TODO: Client-auth Mutation Status
+                        for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                            if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
+                                ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
+                            }
+                        }
+
+                        for (int i = 0; i < 3; i++) {
+                            if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
+                                if (i == 0) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER");
+                                }
+                                if (i == 1) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG");
+                                }
+                                if (i == 2) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT");
+                                }
+
+                                ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
+                                ppc->MyPoplarPRI->Perks[i].bActive = 1;
+                                ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
+                                ppc->MyPoplarPRI->Perks[i].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
+                                ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
+                            }
+                        }
                     }
                 }
             }
@@ -887,45 +982,6 @@ namespace Hooks{
         return ret;
     }
 
-    SafetyHookInline MakeHTTPRequest;
-
-    __int64 MakeHTTPRequestHook(__int64 a1, int a2, __int64 a3, const wchar_t* a4, __int64 a5, __int64 a6, __int64 a7, __int64 a8, int a9, char a10) {
-        // Convert wide string to string
-        std::wstring ws(a4);
-        std::string url(ws.begin(), ws.end());
-
-        // Log original URL
-        std::cout << "Original URL: " << url << std::endl;
-
-        // Find the protocol end (http:// or https://)
-        size_t protocolEnd = url.find("://");
-        if (protocolEnd != std::string::npos) {
-            protocolEnd += 3; // Move past "://"
-
-            // Find the end of the host (could be '/', ':', '?' or end of string)
-            size_t hostEnd = url.find_first_of("/:?", protocolEnd);
-            if (hostEnd == std::string::npos) {
-                hostEnd = url.length();
-            }
-
-            // Replace the host with 127.0.0.1
-            std::string newUrl = "http://localhost:8080" + url.substr(hostEnd);
-
-            // Log modified URL
-            std::cout << "Modified URL: " << newUrl << std::endl;
-
-            // Convert back to wide string
-            std::wstring newWs(newUrl.begin(), newUrl.end());
-
-            // Call original function with modified URL
-            return MakeHTTPRequest.call<__int64>(a1, a2, a3, newWs.c_str(), a5, a6, a7, a8, a9, a10);
-        }
-
-        // If no protocol found, call with original URL
-        std::cout << "No protocol found, using original URL" << std::endl;
-        return MakeHTTPRequest.call<__int64>(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
-    }
-
     SafetyHookInline ConsoleCommand;
     
     bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3) {
@@ -936,11 +992,45 @@ namespace Hooks{
 
         if (std::wstring(a2).contains(L"open") || std::wstring(a2).contains(L"disconnect")) {
             Globals::AugStatus.clear();
+            Globals::ppcsWeSetupAugsFor.clear();
         }
 
         bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
 
         return ret;
+    }
+
+    SafetyHookInline ServerCinematicCrashHook;
+
+    __int64 ServerCinematicCrash(__int64 a1) {
+        return 0;
+    }
+
+    struct Empy {
+        unsigned char pad[0x100];
+    };
+
+    SafetyHookInline ServerCinematicCrash2Hook;
+
+    __int64 ServerCinematicCrash2(__int64 a1,
+        unsigned int a2,
+        __int8* a3,
+        __int8* a4,
+        __int64 a5,
+        int a6,
+        int a7,
+        char a8,
+        unsigned int a9,
+        int a10) {
+        *(Empy**)(a1 + 0x100) = new Empy();
+
+        return ServerCinematicCrash2Hook.call<__int64>(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+    }
+
+    SafetyHookInline ServerCinematicCrash3Hook;
+
+    __int64 ServerCinematicCrash3(__int64 a1) {
+        return 0;
     }
 }
 
@@ -975,6 +1065,9 @@ namespace Init {
             Hooks::PoplarGameInfoSetup = safetyhook::create_inline((void*)(Globals::baseAddress + 0x1474140), &Hooks::PoplarGameInfoSetupHook);
             Hooks::GameEngineTick = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0207e10), &Hooks::GameEngineTickHook);
             Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
+            Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
+            Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
+            Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
@@ -1023,7 +1116,7 @@ void MainThread() {
         EngineLogic::DontPauseOnLossOfFocus();
     }
     else {
-        ClientNetworking::JoinServer(L"127.0.0.1");
+        //ClientNetworking::JoinServer(L"127.0.0.1");
     }
 
     if (Globals::amServer) {
