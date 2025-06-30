@@ -15,7 +15,7 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 6;
+    unsigned int NumPlayersToStart = 5;
 
     unsigned int TeamMinSizeForStart = 0;
 
@@ -56,6 +56,8 @@ namespace Globals {
     bool hasDoneInitialTravel = false;
 
     std::vector<APoplarPlayerController*> ppcsWeSetupAugsFor = std::vector<APoplarPlayerController*>();
+
+    bool DisableGC = false;
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
@@ -203,10 +205,12 @@ namespace ServerNetworking {
     }
 
     UActorChannel* GetActorChannelForActor(AActor* actor, UNetConnection* connection) {
-        for (UChannel* channel : connection->Channels) {
-            if (channel) {
-                if (channel->IsA<UActorChannel>() && ((UActorChannel*)channel)->Actor == actor) {
-                    return (UActorChannel*)channel;
+        if (connection) {
+            for (UChannel* channel : connection->Channels) {
+                if (channel) {
+                    if (channel->IsA<UActorChannel>() && ((UActorChannel*)channel)->Actor == actor) {
+                        return (UActorChannel*)channel;
+                    }
                 }
             }
         }
@@ -505,7 +509,7 @@ namespace Hooks{
             bool tickTheDoomTimer = true;
 
             for (UNetConnection* Connection : Globals::connections) {
-                if ((APoplarPlayerController*)Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) {
+                if (Connection && (APoplarPlayerController*)Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) {
                     tickTheDoomTimer = false;
                     break;
                 }
@@ -523,7 +527,7 @@ namespace Hooks{
                     if(Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn)
                     ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
 
-                    if (((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
+                    if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
                         ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
                     }
                 }
@@ -688,6 +692,8 @@ namespace Hooks{
             characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
 
         if (function == characterPossessionUFunction) {
+            Globals::DisableGC = true;
+
             APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
             if (ppc->MyPoplarPRI && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
                 // TODO: Client-auth Gear Status
@@ -1032,6 +1038,14 @@ namespace Hooks{
     __int64 ServerCinematicCrash3(__int64 a1) {
         return 0;
     }
+
+    SafetyHookInline DoGCHook;
+
+    void DoGC(__int64 a1, char a2) {
+        if (!Globals::DisableGC) {
+            DoGCHook.call(a1, a2);
+        }
+    }
 }
 
 namespace Init {
@@ -1072,6 +1086,8 @@ namespace Init {
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
         }
+
+        Hooks::DoGCHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x90400), &Hooks::DoGC);
 
         Hooks::ConsoleCommand = safetyhook::create_inline((void*)(Globals::baseAddress + 0x01fca00), &Hooks::ConsoleCommandHook);
         Hooks::ProcessEvent = safetyhook::create_inline((void*)(Globals::baseAddress + 0x109ca0), &Hooks::ProcessEventHook);
