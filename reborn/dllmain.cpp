@@ -15,7 +15,7 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 5;
+    unsigned int NumPlayersToStart = 4;
 
     unsigned int TeamMinSizeForStart = 0;
 
@@ -597,6 +597,20 @@ namespace Hooks{
         ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
     }
 
+    __int64 cachedGCa1 = 0x0;
+    char cachedGCa2 = 0x0;
+
+    SafetyHookInline DoGCHook;
+
+    void DoGC(__int64 a1, char a2) {
+        cachedGCa1 = a1;
+        cachedGCa2 = a2;
+
+        if (!Globals::DisableGC) {
+            DoGCHook.call(a1, a2);
+        }
+    }
+
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
         /*
         if (!function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Move")) {
@@ -604,7 +618,25 @@ namespace Hooks{
         }
         */
 
-        UFunction* updateHelixMenuStateUFunction = nullptr;
+        static UFunction* clientTravelUFunction = nullptr;
+
+        if (!clientTravelUFunction)
+            clientTravelUFunction = UFunction::FindFunction("Function Engine.PlayerController.ClientTravel");
+
+        if (function == clientTravelUFunction) {
+            std::cout << "[GAME] Running world switch behaviors!" << std::endl;
+
+            Globals::AugStatus.clear();
+            Globals::ppcsWeSetupAugsFor.clear();
+            Globals::DisableGC = false;
+
+            if (cachedGCa1) {
+                std::cout << "[GAME] Running manual GC!" << std::endl;
+                DoGC(cachedGCa1, cachedGCa2);
+            }
+        }
+
+        static UFunction* updateHelixMenuStateUFunction = nullptr;
 
         if (!updateHelixMenuStateUFunction)
             updateHelixMenuStateUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerStateInfo.UpdateHelixMenuState");
@@ -660,7 +692,7 @@ namespace Hooks{
 
         //PoplarPlayerReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerReplicationInfo - Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection
 
-        UFunction* serverTryBuyNextTierUFunction = nullptr;
+        static UFunction* serverTryBuyNextTierUFunction = nullptr;
 
         if (!serverTryBuyNextTierUFunction)
             serverTryBuyNextTierUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerReplicationInfo.ServerTryBuyNextTierForAugmentation");
@@ -686,7 +718,7 @@ namespace Hooks{
             }
         }
 
-        UFunction* characterPossessionUFunction = nullptr;
+        static UFunction* characterPossessionUFunction = nullptr;
 
         if (!characterPossessionUFunction)
             characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
@@ -777,7 +809,7 @@ namespace Hooks{
                                 ppc->MyPoplarPRI->Perks[i].bActive = 1;
                                 ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
                                 ppc->MyPoplarPRI->Perks[i].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
-                                ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
+                                //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
                             }
                         }
                     }
@@ -788,7 +820,7 @@ namespace Hooks{
             }
         }
 
-        UFunction* confirmCharacterSelectionUFunction = nullptr;
+        static UFunction* confirmCharacterSelectionUFunction = nullptr;
 
         if (!confirmCharacterSelectionUFunction)
             confirmCharacterSelectionUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection");
@@ -801,7 +833,7 @@ namespace Hooks{
             t.detach();
         }
 
-        UFunction* serverConvolveUFunction = nullptr;
+        static UFunction* serverConvolveUFunction = nullptr;
 
         if (!serverConvolveUFunction)
             serverConvolveUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerProcessConvolve");
@@ -988,24 +1020,6 @@ namespace Hooks{
         return ret;
     }
 
-    SafetyHookInline ConsoleCommand;
-    
-    bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3) {
-        if (Globals::amServer && !Globals::hasDoneInitialTravel) {
-            Globals::hasDoneInitialTravel = true;
-            a2 = Settings::MapString;
-        }
-
-        if (std::wstring(a2).contains(L"open") || std::wstring(a2).contains(L"disconnect")) {
-            Globals::AugStatus.clear();
-            Globals::ppcsWeSetupAugsFor.clear();
-        }
-
-        bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
-
-        return ret;
-    }
-
     SafetyHookInline ServerCinematicCrashHook;
 
     __int64 ServerCinematicCrash(__int64 a1) {
@@ -1039,12 +1053,29 @@ namespace Hooks{
         return 0;
     }
 
-    SafetyHookInline DoGCHook;
+    SafetyHookInline ConsoleCommand;
 
-    void DoGC(__int64 a1, char a2) {
-        if (!Globals::DisableGC) {
-            DoGCHook.call(a1, a2);
+    bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3) {
+        if (Globals::amServer && !Globals::hasDoneInitialTravel) {
+            Globals::hasDoneInitialTravel = true;
+            a2 = Settings::MapString;
         }
+
+        if (std::wstring(a2).contains(L"open") || std::wstring(a2).contains(L"disconnect")) {
+            std::cout << "[GAME] Running world switch behaviors!" << std::endl;
+            Globals::AugStatus.clear();
+            Globals::ppcsWeSetupAugsFor.clear();
+            Globals::DisableGC = false;
+
+            if (cachedGCa1) {
+                std::cout << "[GAME] Running manual GC!" << std::endl;
+                DoGC(cachedGCa1, cachedGCa2);
+            }
+        }
+
+        bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
+
+        return ret;
     }
 }
 
@@ -1135,7 +1166,7 @@ void MainThread() {
         //ClientNetworking::JoinServer(L"127.0.0.1");
     }
 
-    if (Globals::amServer) {
+    if (!Globals::amServer) {
         while (true) {
             while (!GetAsyncKeyState(VK_F7)) {
 
