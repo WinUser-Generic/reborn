@@ -15,11 +15,11 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 2;
+    unsigned int NumPlayersToStart = 6;
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Caverns_P"; //
+    const wchar_t* MapString = L"open Inc_Stronghold2_P"; //
 }
 
 namespace Globals {
@@ -505,7 +505,7 @@ namespace Hooks{
             bool tickTheDoomTimer = true;
 
             for (UNetConnection* Connection : Globals::connections) {
-                if (((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) {
+                if ((APoplarPlayerController*)Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) {
                     tickTheDoomTimer = false;
                     break;
                 }
