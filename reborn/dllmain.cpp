@@ -10,6 +10,38 @@
 #include <algorithm>
 #include <execution>
 
+namespace EngineLogic {
+    void* EngineMalloc(size_t size);
+}
+
+// Override global operator new
+void* operator new(size_t size) {
+    void* ptr = EngineLogic::EngineMalloc(size);
+    if (!ptr) {
+        throw std::bad_alloc();
+    }
+    return ptr;
+}
+
+// Override global operator new (nothrow version)
+void* operator new(size_t size, const std::nothrow_t&) noexcept {
+    return EngineLogic::EngineMalloc(size);
+}
+
+// Override global operator new[] (array version)
+void* operator new[](size_t size) {
+    void* ptr = EngineLogic::EngineMalloc(size);
+    if (!ptr) {
+        throw std::bad_alloc();
+    }
+    return ptr;
+}
+
+// Override global operator new[] (nothrow array version)
+void* operator new[](size_t size, const std::nothrow_t&) noexcept {
+    return EngineLogic::EngineMalloc(size);
+}
+
 namespace Settings {
     int32_t gamePort = 7777;
 
@@ -19,7 +51,7 @@ namespace Settings {
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Inc_Stronghold2_P"; //
+    const wchar_t* MapString = L"open Toby_Raid_P"; //
 }
 
 namespace Globals {
@@ -277,6 +309,16 @@ namespace ServerNetworking {
         return aPrio > bPrio;
     }
 
+    bool ConnectionFull(UNetConnection* connection) {
+        for (UChannel* Channel : connection->Channels) {
+            if (!Channel) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     void TickNetServer(UTcpNetDriver* NetDriver) {
         static AWorldInfo* worldInfo = nullptr;
 
@@ -347,12 +389,13 @@ namespace ServerNetworking {
                     //printf("[NETWORKING] No channel, creating...\n");
 
                     channel = reinterpret_cast<UActorChannel * (__thiscall*)(UNetConnection * connection, int channelType, uint32_t openedLocally, int chIndex)>(Globals::baseAddress + 0x061daa0)(connection, 2, 1, -1);
-                    
-                    if (channel && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1)) {
+
+                    if (channel) { //&& (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1)
                         //printf("[NETWORKING] Setting channel actor...\n");
                         reinterpret_cast<void(__thiscall*)(UActorChannel*, AActor*)>(Globals::baseAddress + 0x0611970)(channel, actor);
                     }
                 }
+
 
                 if (channel && channel->Actor && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1) && channel->NumOutRec < 0xFE) {
                     //printf("[NETWORKING] Replication time!\n");
@@ -374,6 +417,8 @@ namespace ServerNetworking {
         {
             std::lock_guard<std::mutex> lock(Globals::mutex);
 
+            //Globals::DisableGC = false;
+
             while (!Globals::channelsToClose.empty()) {
                 UActorChannel* ch = Globals::channelsToClose.back();
 
@@ -381,8 +426,12 @@ namespace ServerNetworking {
 
                 if (ch && ch->Connection) {
                     (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
+                    //reinterpret_cast<char(*)(UActorChannel*)>(Globals::baseAddress + 0x74E80)(ch);
+                    //reinterpret_cast<char(*)(UActorChannel*)>(Globals::baseAddress + 0x75040)(ch);
                 }
             }
+
+           // Globals::DisableGC = true;
         }
     }
 }
@@ -630,10 +679,12 @@ namespace Hooks{
             Globals::ppcsWeSetupAugsFor.clear();
             Globals::DisableGC = false;
 
+            /*
             if (cachedGCa1) {
                 std::cout << "[GAME] Running manual GC!" << std::endl;
                 DoGC(cachedGCa1, cachedGCa2);
             }
+            */
         }
 
         static UFunction* updateHelixMenuStateUFunction = nullptr;
@@ -724,93 +775,50 @@ namespace Hooks{
             characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
 
         if (function == characterPossessionUFunction) {
-            Globals::DisableGC = true;
-
             APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
             if (ppc->MyPoplarPRI && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
                 // TODO: Client-auth Gear Status
-                if(Globals::amServer){
-                    bool alreadySetup = false;
-                    for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
-                        if (cmpPPC == ppc) {
-                            alreadySetup = true;
-                            break;
-                        }
-                    }
-
-                    if (!alreadySetup) {
-                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
-
-                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
-                        // TODO: Client-auth Mutation Status
-                        for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                            if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
-                                ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
-                            }
-                        }
-
-                        for (int i = 0; i < 3; i++) {
-                            if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
-                                if (i == 0) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER");
-                                }
-                                if (i == 1) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG");
-                                }
-                                if (i == 2) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT");
-                                }
-
-                                ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
-                                ppc->MyPoplarPRI->Perks[i].bActive = 1;
-                                ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
-                                ppc->MyPoplarPRI->Perks[i].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
-                                //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
-                            }
-                        }
-                    }
-
+                if (Globals::amServer) {
+                    //Globals::DisableGC = true;
                 }
-                else {
-                    bool alreadySetup = false;
-                    for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
-                        if (cmpPPC == ppc) {
-                            alreadySetup = true;
-                            break;
+
+                bool alreadySetup = false;
+                for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
+                    if (cmpPPC == ppc) {
+                        alreadySetup = true;
+                        break;
+                    }
+                }
+
+                if (!alreadySetup) {
+                    Globals::ppcsWeSetupAugsFor.push_back(ppc);
+
+                    ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                    // TODO: Client-auth Mutation Status
+                    for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                        if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
+                            ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
                         }
                     }
 
-                    if (!alreadySetup) {
-                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
-
-                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
-                        // TODO: Client-auth Mutation Status
-                        for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                            if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
-                                ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
+                    for (int i = 0; i < 3; i++) {
+                        if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
+                            if (i == 0) {
+                                ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER");
                             }
-                        }
-
-                        for (int i = 0; i < 3; i++) {
-                            if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
-                                if (i == 0) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER");
-                                }
-                                if (i == 1) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG");
-                                }
-                                if (i == 2) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT");
-                                }
-
-                                ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
-                                ppc->MyPoplarPRI->Perks[i].bActive = 1;
-                                ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
-                                ppc->MyPoplarPRI->Perks[i].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
-                                //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
+                            if (i == 1) {
+                                ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG");
                             }
+                            if (i == 2) {
+                                ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT");
+                            }
+
+                            ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
+                            ppc->MyPoplarPRI->Perks[i].bActive = 1;
+                            ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
+                            ppc->MyPoplarPRI->Perks[i].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
+                            //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
                         }
                     }
                 }
@@ -1065,17 +1073,27 @@ namespace Hooks{
             std::cout << "[GAME] Running world switch behaviors!" << std::endl;
             Globals::AugStatus.clear();
             Globals::ppcsWeSetupAugsFor.clear();
-            Globals::DisableGC = false;
 
+            /*
             if (cachedGCa1) {
                 std::cout << "[GAME] Running manual GC!" << std::endl;
                 DoGC(cachedGCa1, cachedGCa2);
             }
+            */
         }
 
         bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
 
         return ret;
+    }
+
+    SafetyHookInline FuckyGCHook;
+
+    __int64 FuckyGC(__int64 a1, __int64 a2) {
+        if (Globals::DisableGC) {
+            return 0;
+        }
+        return FuckyGCHook.call<__int64>(a1, a2);
     }
 }
 
@@ -1113,6 +1131,7 @@ namespace Init {
             Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
             Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
             Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
+            Hooks::FuckyGCHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8f320), &Hooks::FuckyGC);
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
