@@ -10,44 +10,12 @@
 #include <algorithm>
 #include <execution>
 
-namespace EngineLogic {
-    void* EngineMalloc(size_t size);
-}
-
-// Override global operator new
-void* operator new(size_t size) {
-    void* ptr = EngineLogic::EngineMalloc(size);
-    if (!ptr) {
-        throw std::bad_alloc();
-    }
-    return ptr;
-}
-
-// Override global operator new (nothrow version)
-void* operator new(size_t size, const std::nothrow_t&) noexcept {
-    return EngineLogic::EngineMalloc(size);
-}
-
-// Override global operator new[] (array version)
-void* operator new[](size_t size) {
-    void* ptr = EngineLogic::EngineMalloc(size);
-    if (!ptr) {
-        throw std::bad_alloc();
-    }
-    return ptr;
-}
-
-// Override global operator new[] (nothrow array version)
-void* operator new[](size_t size, const std::nothrow_t&) noexcept {
-    return EngineLogic::EngineMalloc(size);
-}
-
 namespace Settings {
     int32_t gamePort = 7777;
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 4;
+    unsigned int NumPlayersToStart = 2;
 
     unsigned int TeamMinSizeForStart = 0;
 
@@ -164,14 +132,6 @@ namespace GameUtils {
 }
 
 namespace EngineLogic {
-    void ExecConsoleCommand(const wchar_t* command) {
-        reinterpret_cast<void* (*)(uintptr_t, const wchar_t*, uintptr_t)>(Globals::baseAddress + 0x01fca00)((__int64)((*GObjects)[0]) + 0x25ebde8, command, 0);
-    }
-
-    void DontPauseOnLossOfFocus() {
-        SDKUtils::GetLastOfClass<UEngine>()->bPauseOnLossOfFocus = false;
-    }
-
     void* EngineMalloc(size_t size) {
         /*
         int* param_1 = reinterpret_cast<int* (*)()>(Globals::baseAddress + 0x0d33260)();
@@ -181,6 +141,24 @@ namespace EngineLogic {
             */
 
         return reinterpret_cast<void* (*)(size_t)>(Globals::baseAddress + 0xD2E0A0)(size);
+    }
+
+    UObject* StaticConstructObject(UClass* theClass, UObject* outer) {
+        FName* name = (FName*)EngineMalloc(sizeof(FName));
+        *name = FName();
+        return reinterpret_cast<UObject * (*)(UClass*, UObject* outer, FName* name, __int64 a4, __int64 a5, __int64 a6, __int64 a7, __int64 a8, int a9)>(Globals::baseAddress + 0x8C050)(theClass, outer, name, 0, 0, 0, 0, 0, 0);
+    }
+
+    UObject* ScuffedDuplicateObject(UObject* InObject, UObject* Outer) {
+        return reinterpret_cast<UObject*(*)(UObject* SourceObject, UObject* RootObject, UObject* DestOuter, const wchar_t* DestName, __int64 FlagMask, UClass* DestClass)>(Globals::baseAddress + 0x8C390)(InObject, InObject, Outer, L"None", 0x0, InObject->Class);
+    }
+
+    void ExecConsoleCommand(const wchar_t* command) {
+        reinterpret_cast<void* (*)(uintptr_t, const wchar_t*, uintptr_t)>(Globals::baseAddress + 0x01fca00)((__int64)((*GObjects)[0]) + 0x25ebde8, command, 0);
+    }
+
+    void DontPauseOnLossOfFocus() {
+        SDKUtils::GetLastOfClass<UEngine>()->bPauseOnLossOfFocus = false;
     }
 
     FString* MakeFString(const wchar_t* contents) {
@@ -610,7 +588,7 @@ namespace Hooks{
         std::cout << "Startup Complete!" << std::endl;
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
         SDKUtils::GetLastOfClass<UPoplarPressStartGFxMovie>()->ContinueToMenu();
-        EngineLogic::ExecConsoleCommand(L"open 71.207.75.31");
+        EngineLogic::ExecConsoleCommand(L"open 127.0.0.1");
     }
 
     void MainPanelClickedHook(uint32_t PanelId) {
@@ -795,29 +773,40 @@ namespace Hooks{
 
                     ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
 
+                    /*
+                    for (int i = 0; i < 0xA; i++) { //UPoplarAugCategory* aug : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->AllCategories
+                        UPoplarAugCategory* aug = ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->AllCategories[i];
+                        
+                        if (!ppc->MyPoplarPRI->Augs.AllCategories[i].CategoryDef) {
+                            ppc->MyPoplarPRI->Augs.AllCategories[i].CategoryDef = aug;
+                            ppc->MyPoplarPRI->Augs.AllCategories[i].Augs[0].AugDef = aug->Augs[0];
+                            ppc->MyPoplarPRI->Augs.AllCategories[i].Augs[1].AugDef = aug->Augs[1];
+                        }
+                    }
+                    */
                     // TODO: Client-auth Mutation Status
                     for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
                         if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
-                            ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = mut->Augmentation;
+                            ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
                         }
                     }
 
                     for (int i = 0; i < 3; i++) {
                         if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
                             if (i == 0) {
-                                ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER");
+                                ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER"), Globals::GetGWorld());
                             }
                             if (i == 1) {
-                                ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG");
+                                ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG"), Globals::GetGWorld());
                             }
                             if (i == 2) {
-                                ppc->MyPoplarPRI->Perks[i].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT");
+                                ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT"), Globals::GetGWorld());
                             }
 
                             ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
                             ppc->MyPoplarPRI->Perks[i].bActive = 1;
                             ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
-                            ppc->MyPoplarPRI->Perks[i].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
+                            ppc->MyPoplarPRI->Perks[i].Rarity = 5;//GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
                             //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
                         }
                     }
