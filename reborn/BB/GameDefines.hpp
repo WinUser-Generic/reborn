@@ -381,10 +381,13 @@ private:
 		if(!baseAddress)
 			baseAddress = (size_t)GetModuleHandleA(nullptr);
 
+		
 		int* param_1 = reinterpret_cast<int* (*)()>(baseAddress + 0x0d33260)();
 
 		return reinterpret_cast<void* (*)(unsigned int param_1, size_t param_2, size_t param_3, size_t param_4, size_t param_5, unsigned int param_6, unsigned int param_7, const char* param_8, unsigned int param_9, const char* param_10)>(baseAddress + 0x0d2e160)(*(int*)(param_1 + 0x10), 0, size, 0x8, 0, 0, 0x31c0019,
 			"t:\\POPLAR-PATCH-PC\\Development\\Src\\Core\\Src\\gbxmem.cpp", 0x46, "appMalloc");
+			
+		//return reinterpret_cast<void* (*)(long poolId, __int64, __int64 size, __int64 align, __int64, int, __int64, __int64, int, __int64)>(baseAddress + 0xD2E160)(-2, 0, size, 0x1, 0x8, 0, 0x321001F, baseAddress + 0x26b62fa, 0, baseAddress + 0x26b62fa);
 	}
 
 	void ReAllocate(int32_t newArrayMax)

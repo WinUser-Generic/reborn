@@ -15,7 +15,7 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 2;
+    unsigned int NumPlayersToStart = 4;
 
     unsigned int TeamMinSizeForStart = 0;
 
@@ -134,13 +134,44 @@ namespace GameUtils {
 namespace EngineLogic {
     void* EngineMalloc(size_t size) {
         /*
+        sub_140D2E3C0(
+                            2LL,
+                            0LL,
+                            2 * v3,
+                            8LL,
+                            0LL,
+                            0,
+                            52494367,
+                            "t:\\poplar-patch-pc\\development\\src\\core\\inc\\ContainerAllocationPolicies.h",
+                            243,
+                            "TGbxHeapAllocator<2,52494367,0,8,1>::ForAnyElementType<2>::ResizeAllocation");*/
+        /*
         int* param_1 = reinterpret_cast<int* (*)()>(Globals::baseAddress + 0x0d33260)();
 
         return reinterpret_cast<void* (*)(unsigned int param_1, size_t param_2, size_t param_3, size_t param_4, size_t param_5, unsigned int param_6, unsigned int param_7, const char* param_8, unsigned int param_9, const char* param_10)>(Globals::baseAddress + 0x0d2e160)(*(int*)(param_1 + 0x10), 0, size, 0x8, 0, 0, 0x31c0019,
             "t:\\POPLAR-PATCH-PC\\Development\\Src\\Core\\Src\\gbxmem.cpp", 0x46, "appMalloc");
             */
 
-        return reinterpret_cast<void* (*)(size_t)>(Globals::baseAddress + 0xD2E0A0)(size);
+        //return reinterpret_cast<void* (*)(size_t)>(Globals::baseAddress + 0xD2E0A0)(size);
+        return reinterpret_cast<void* (*)(__int64 a1,
+            const void* a2,
+            __int64 a3,
+            __int64 a4,
+            __int64 a5,
+            LONG a6,
+            int a7,
+            const char* a8,
+            int a9,
+            const char* a10)>(Globals::baseAddress + 0xD2E3C0)(2LL,
+                0LL,
+                size,
+                8LL,
+                0LL,
+                0,
+                52494367,
+                "t:\\poplar-patch-pc\\development\\src\\core\\inc\\ContainerAllocationPolicies.h",
+                243,
+                "TGbxHeapAllocator<2,52494367,0,8,1>::ForAnyElementType<2>::ResizeAllocation");
     }
 
     UObject* StaticConstructObject(UClass* theClass, UObject* outer) {
@@ -181,7 +212,7 @@ namespace EngineLogic {
     }
 
     void* ScaleformMalloc(unsigned int size) {
-        return reinterpret_cast<void* (*)(long poolId, __int64, __int64 size, __int64 align, __int64, int, __int64, __int64, int, __int64)>(Globals::baseAddress + 0xD2E160)(2, 0, size, 0x8, 0, 1, 0x321001F, 0x26b62fa, 0, 0x26b62fa);
+        return reinterpret_cast<void* (*)(long poolId, __int64, __int64 size, __int64 align, __int64, int, __int64, __int64, int, __int64)>(Globals::baseAddress + 0xD2E160)(-2, 0, size, 0x1, 0x8, 0, 0x321001F, Globals::baseAddress + 0x26b62fa, 0, Globals::baseAddress + 0x26b62fa);
     }
 }
 
@@ -516,6 +547,8 @@ namespace Hooks{
 
                     pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
 
+                    SDKUtils::GetLastOfClass<AGameInfo>()->eventPostLogin(pc);
+
                     //pc->ClientGotoState(FName(), FName());
                 }
 
@@ -645,6 +678,10 @@ namespace Hooks{
         }
         */
 
+        if (object->GetFullName().contains("UUIDataProvider")) {
+            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        }
+
         static UFunction* clientTravelUFunction = nullptr;
 
         if (!clientTravelUFunction)
@@ -704,7 +741,6 @@ namespace Hooks{
         if (function->GetFullName().contains("RefreshExperience")) {
             reinterpret_cast<UPoplarFrontendGFxMovie_execOnRefreshExperienceDataComplete_Params*>(params)->ServiceResult = 0;
         }
-
         if (function->GetFullName().contains("DataProvider")) {
             std::cout << "DataProvider" << std::endl;
             std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->Provider->GetFullName() << std::endl;
@@ -714,7 +750,7 @@ namespace Hooks{
 
             if (reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->EndIndex == 39) {
                 std::cout << "END INDEX 39, SKIPPING" << std::endl;
-                //return;
+                return;
             }
         }
         */
@@ -768,7 +804,8 @@ namespace Hooks{
                     }
                 }
 
-                if (!alreadySetup) {
+                if (true) { //!alreadySetup
+                    std::cout << "Setting up mutations, gear, and helix for " << ppc->GetFullName() << std::endl;
                     Globals::ppcsWeSetupAugsFor.push_back(ppc);
 
                     ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
@@ -784,6 +821,7 @@ namespace Hooks{
                         }
                     }
                     */
+
                     // TODO: Client-auth Mutation Status
                     for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
                         if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
@@ -881,7 +919,7 @@ namespace Hooks{
             //return;
         }
 
-        /*
+
         static UFunction* refreshInventoryUFunction = nullptr;
 
         if (!refreshInventoryUFunction)
@@ -899,7 +937,6 @@ namespace Hooks{
         if (function == readStatsUFunction) {
             reinterpret_cast<UPoplarCommandGFxMovie_execReadPlayersStatsDataComplete_Params*>(params)->ServiceResult = 0;
         }
-        */
 
         //Function PoplarGame.PoplarCommandGFxMovie.ReadPlayersStatsDataComplete
 
@@ -1084,6 +1121,22 @@ namespace Hooks{
         }
         return FuckyGCHook.call<__int64>(a1, a2);
     }
+
+    SafetyHookInline MetagameGCCrash;
+
+    __int64 MetagameGCCrashHook(__int64 a1, const wchar_t* a2) {
+        std::wstring wstr(a2);
+        std::string astr(wstr.begin(), wstr.end());
+        std::cout << astr << std::endl;
+        return MetagameGCCrash.call<__int64>(a1, a2);
+        if (std::wstring(a2).contains(L"InitArtifactRoot_Bank")) {
+            return 0;
+        }
+        else {
+            
+        }
+        return 0;
+    }
 }
 
 namespace Init {
@@ -1120,13 +1173,15 @@ namespace Init {
             Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
             Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
             Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
-            Hooks::FuckyGCHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8f320), &Hooks::FuckyGC);
+            //Hooks::FuckyGCHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8f320), &Hooks::FuckyGC);
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
         }
 
-        Hooks::DoGCHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x90400), &Hooks::DoGC);
+        //Hooks::DoGCHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x90400), &Hooks::DoGC);
+
+        //Hooks::MetagameGCCrash = safetyhook::create_inline((void*)(Globals::baseAddress + 0xB8EA10), &Hooks::MetagameGCCrashHook);
 
         Hooks::ConsoleCommand = safetyhook::create_inline((void*)(Globals::baseAddress + 0x01fca00), &Hooks::ConsoleCommandHook);
         Hooks::ProcessEvent = safetyhook::create_inline((void*)(Globals::baseAddress + 0x109ca0), &Hooks::ProcessEventHook);
@@ -1179,6 +1234,53 @@ void MainThread() {
             while (!GetAsyncKeyState(VK_F7)) {
 
             }
+
+            Globals::DisableGC = true;
+
+            UPoplarCommandArtifactsGFxMovie* cachedLOL = SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>();
+
+            std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
+
+            static int i = 0;
+
+            for (UPoplarPerkFunction* perk : SDKUtils::GetAllOfClass<UPoplarPerkFunction>()) {
+                if (perk->GetFullName().contains("Default")) {
+                    continue;
+                }
+
+                i++;
+
+                if (i > 5)
+                    continue;
+
+                FReplicatedPerkItem item = FReplicatedPerkItem();
+
+                item.PerkFunction = perk;
+                item.ItemLevel = 1;
+                item.Rarity = 1;
+                item.bActive = true;
+                item.bCanUse = true;
+                //item.PlayerID = FUniqueNetId();
+                //item.ApolloJSON = L"{}";
+                item.EntitlementIndex = i;
+                item.MetaID = perk->MetaContentID;
+                item.AssetKey = perk->AssetTrackerKey;
+                item.ItemData = FPointer();
+                item.ItemData.Dummy = (__int64)0;
+
+                cachedLOL->PerkBank.push_back(item);
+            }
+
+            std::cout << i << std::endl;
+
+            std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
+
+            std::cout << "Control passed back to game" << std::endl;
+            cachedLOL->bBankNeedsMetagameUpdate = false;
+            cachedLOL->SelectedBankPerkIndex = 0;
+            cachedLOL->ArtifactInitState = ECommandArtifactInitializingState::ARTIFACTINITSTATE_None;
+            cachedLOL->ArtifactPageState = ECommandArtifactPageState::ARTIFACTSTATE_Loadouts;
+            cachedLOL->ArtifactRequestState = ECommandArtifactPageRequestState::ARTIFACTREQUESTSTATE_NoRequest;
 
             while (GetAsyncKeyState(VK_F7)) {
 
