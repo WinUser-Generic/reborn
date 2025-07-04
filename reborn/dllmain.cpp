@@ -15,7 +15,7 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 4;
+    unsigned int NumPlayersToStart = 2;
 
     unsigned int TeamMinSizeForStart = 0;
 
@@ -804,23 +804,12 @@ namespace Hooks{
                     }
                 }
 
-                if (true) { //!alreadySetup
+                if (!alreadySetup) { //
                     std::cout << "Setting up mutations, gear, and helix for " << ppc->GetFullName() << std::endl;
                     Globals::ppcsWeSetupAugsFor.push_back(ppc);
 
                     ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
 
-                    /*
-                    for (int i = 0; i < 0xA; i++) { //UPoplarAugCategory* aug : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->AllCategories
-                        UPoplarAugCategory* aug = ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->AllCategories[i];
-                        
-                        if (!ppc->MyPoplarPRI->Augs.AllCategories[i].CategoryDef) {
-                            ppc->MyPoplarPRI->Augs.AllCategories[i].CategoryDef = aug;
-                            ppc->MyPoplarPRI->Augs.AllCategories[i].Augs[0].AugDef = aug->Augs[0];
-                            ppc->MyPoplarPRI->Augs.AllCategories[i].Augs[1].AugDef = aug->Augs[1];
-                        }
-                    }
-                    */
 
                     // TODO: Client-auth Mutation Status
                     for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
@@ -1227,65 +1216,6 @@ void MainThread() {
     }
     else {
         //ClientNetworking::JoinServer(L"127.0.0.1");
-    }
-
-    if (!Globals::amServer) {
-        while (true) {
-            while (!GetAsyncKeyState(VK_F7)) {
-
-            }
-
-            Globals::DisableGC = true;
-
-            UPoplarCommandArtifactsGFxMovie* cachedLOL = SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>();
-
-            std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
-
-            static int i = 0;
-
-            for (UPoplarPerkFunction* perk : SDKUtils::GetAllOfClass<UPoplarPerkFunction>()) {
-                if (perk->GetFullName().contains("Default")) {
-                    continue;
-                }
-
-                i++;
-
-                if (i > 5)
-                    continue;
-
-                FReplicatedPerkItem item = FReplicatedPerkItem();
-
-                item.PerkFunction = perk;
-                item.ItemLevel = 1;
-                item.Rarity = 1;
-                item.bActive = true;
-                item.bCanUse = true;
-                //item.PlayerID = FUniqueNetId();
-                //item.ApolloJSON = L"{}";
-                item.EntitlementIndex = i;
-                item.MetaID = perk->MetaContentID;
-                item.AssetKey = perk->AssetTrackerKey;
-                item.ItemData = FPointer();
-                item.ItemData.Dummy = (__int64)0;
-
-                cachedLOL->PerkBank.push_back(item);
-            }
-
-            std::cout << i << std::endl;
-
-            std::cout << SDKUtils::GetLastOfClass< UPoplarCommandArtifactsGFxMovie>()->PerkBank.size() << std::endl;
-
-            std::cout << "Control passed back to game" << std::endl;
-            cachedLOL->bBankNeedsMetagameUpdate = false;
-            cachedLOL->SelectedBankPerkIndex = 0;
-            cachedLOL->ArtifactInitState = ECommandArtifactInitializingState::ARTIFACTINITSTATE_None;
-            cachedLOL->ArtifactPageState = ECommandArtifactPageState::ARTIFACTSTATE_Loadouts;
-            cachedLOL->ArtifactRequestState = ECommandArtifactPageRequestState::ARTIFACTREQUESTSTATE_NoRequest;
-
-            while (GetAsyncKeyState(VK_F7)) {
-
-            }
-        }
     }
 
     bool listening = false;
