@@ -294,8 +294,18 @@ namespace ServerNetworking {
             if (!connection)
                 continue;
 
-            if (GetConnectionState(connection) != 3)
+            if (GetConnectionState(connection) != 3) {
+                if (connection->Actor) {
+                    Globals::connections.erase(std::remove_if(Globals::connections.begin(), Globals::connections.end(), [&connection](UNetConnection* cmp) {
+                        if(cmp == connection)
+                            std::cout << "[NETWORKING] Player disconnected!" << std::endl;
+
+                        return cmp == connection;
+                    }), Globals::connections.end());
+                }
+
                 continue;
+            }
 
             if(!(*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1))
                 continue;
@@ -589,10 +599,6 @@ namespace Hooks{
         }
         */
 
-        if (object->GetFullName().contains("UUIDataProvider")) {
-            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
-        }
-
         static UFunction* clientTravelUFunction = nullptr;
 
         if (!clientTravelUFunction)
@@ -637,28 +643,6 @@ namespace Hooks{
 
             return;
         }
-
-        /*
-        if (function->GetFullName().contains("FromHydra")) {
-            reinterpret_cast<UPoplarMetagameInventory_execOnReceivePlayerMetaDataFromHydra_Params*>(params)->ServiceResult = 0;
-        }
-
-        if (function->GetFullName().contains("RefreshExperience")) {
-            reinterpret_cast<UPoplarFrontendGFxMovie_execOnRefreshExperienceDataComplete_Params*>(params)->ServiceResult = 0;
-        }
-        if (function->GetFullName().contains("DataProvider")) {
-            std::cout << "DataProvider" << std::endl;
-            std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->Provider->GetFullName() << std::endl;
-            std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->Type.ToString() << std::endl;
-            std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->StartIndex << std::endl;
-            std::cout << reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->EndIndex << std::endl;
-
-            if (reinterpret_cast<UPoplarCommandArtifactsGFxMovie_execRequestItemRangeForDataProvider_Params*>(params)->EndIndex == 39) {
-                std::cout << "END INDEX 39, SKIPPING" << std::endl;
-                return;
-            }
-        }
-        */
 
         //PoplarPlayerReplicationInfo Wishbone_P.TheWorld.PersistentLevel.PoplarPlayerReplicationInfo - Function PoplarGame.PoplarPlayerReplicationInfo.OnConfirmCharacterSelection
 
@@ -859,30 +843,6 @@ namespace Hooks{
 
         int i = 0;
 
-        /*
-        if (Globals::amServer) {
-            for (UPoplarCharacterSelectStyleDefinition* css : SDKUtils::GetAllOfClass< UPoplarCharacterSelectStyleDefinition>()) {
-                if (!codeNameString && i == 3) {
-                    codeNameString = css;
-                }
-
-                i++;
-
-                std::cout << css->StyleName.ToString() << std::endl;
-                std::cout << css->CodeName.ToString() << std::endl;
-                std::cout << "------------------------" << std::endl;
-            }
-
-            //a1->CharacterSelectStyleOptionString = codeNameString->CodeName;
-
-            for (APoplarCharacterSelectManager* cs : SDKUtils::GetAllOfClass< APoplarCharacterSelectManager>()) {
-                std::cout << cs->GetFullName() << std::endl;
-                cs->SelectionStyleDefinition = codeNameString;
-                cs->bWaitForStandaloneEntitlements = false;
-            }
-        }
-        */
-
         std::cout << "[Game] Launched World " << Globals::GetGWorld()->GetFullName() << "!" << std::endl;
 
         if (Globals::amServer && !Globals::GetGWorld()->GetFullName().contains("MenuMap")) {
@@ -902,35 +862,6 @@ namespace Hooks{
 
             ServerNetworking::InitListen();
         }
-
-        /*
-        if (Globals::amServer)
-            UObject::FindObject<AWorldInfo>("WorldInfo Snowdrift_P.TheWorld.PersistentLevel.WorldInfo")->NetMode = ENetMode::NM_DedicatedServer;
-
-        printf("[GAME] Overrode character select mode!\n");
-        if (Globals::amServer) {
-            a1->CharacterSelectStyleOptionString = codeNameString->CodeName;
-
-            for (APoplarCharacterSelectManager* cs : SDKUtils::GetAllOfClass< APoplarCharacterSelectManager>()) {
-                std::cout << cs->GetFullName() << std::endl;
-                cs->SelectionStyleDefinition = codeNameString;
-                cs->bWaitForStandaloneEntitlements = false;
-            }
-
-            for (APoplarGameReplicationInfo* csmd : SDKUtils::GetAllOfClass< APoplarGameReplicationInfo>()) {
-                std::cout << csmd->GetFullName() << std::endl;
-                if (csmd->CharacterSelectManager) {
-                    std::cout << csmd->GetFullName() << std::endl;
-                }
-                else {
-                    csmd->CharacterSelectManager = SDKUtils::GetLastOfClass<APoplarCharacterSelectManager>();
-                    csmd->CharacterSelectManager->SelectionStyleDefinition = codeNameString;
-                }
-            }
-
-            
-        }
-        */
 
         return ret;
     }
