@@ -9,13 +9,20 @@
 #include <random>
 #include <algorithm>
 #include <execution>
+#include <d3dcommon.h>
+#include <dxgi.h>
+#include <d3d11.h>
+#include "imgui/imgui_impl_dx11.h"
+#include "imgui/imgui_impl_win32.h"
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 namespace Settings {
     int32_t gamePort = 7777;
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 2;
+    unsigned int NumPlayersToStart = 4;
 
     unsigned int TeamMinSizeForStart = 0;
 
@@ -48,6 +55,10 @@ namespace Globals {
     bool hasDoneInitialTravel = false;
 
     std::vector<APoplarPlayerController*> ppcsWeSetupAugsFor = std::vector<APoplarPlayerController*>();
+
+    __int64* methodsTable = nullptr;
+
+    bool SaveManagerOpen = false;
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
@@ -166,6 +177,10 @@ namespace EngineLogic {
     void* ScaleformMalloc(unsigned int size) {
         return reinterpret_cast<void* (*)(long poolId, __int64, __int64 size, __int64 align, __int64, int, __int64, __int64, int, __int64)>(Globals::baseAddress + 0xD2E160)(-2, 0, size, 0x1, 0x8, 0, 0x321001F, Globals::baseAddress + 0x26b62fa, 0, Globals::baseAddress + 0x26b62fa);
     }
+}
+
+namespace ImguiUtils {
+
 }
 
 namespace ServerNetworking {
@@ -414,15 +429,6 @@ namespace ClientNetworking {
         cmd.append(ip);
 
         EngineLogic::ExecConsoleCommand(cmd.c_str());
-
-        /*
-        Globals::shouldJoinMatchOnCharacterSelectComplete = true;
-        Globals::ipToJoin = ip;
-
-        EngineLogic::ExecConsoleCommand(L"open Wishbone_P?bTournamentMode=1?WarmupTime=30");
-        */
-
-        //EngineLogic::ExecConsoleCommand(L"open 127.0.0.1:6969"); //
     }
 
     bool IsNetReady(UNetConnection* connection, int saturate) {
@@ -440,6 +446,51 @@ namespace ClientNetworking {
             vmts = safetyhook::create_vmt(SDKUtils::GetLastOfClass<UNetConnection>());
 
             vms = safetyhook::create_vm(vmts, 0x260 / 0x8, IsNetReady);
+        }
+    }
+}
+
+namespace Hooks {
+    void StartupCompletedHook();
+}
+
+namespace Metagame {
+    struct Item {
+        std::string itemFullName;
+        uint32_t level;
+    };
+
+    struct Character {
+        std::string characterName;
+        uint32_t level;
+        float nextLevelProgress;
+    };
+
+    struct SaveFile {
+        std::string name;
+        bool everythingUnlocked;
+        std::vector<Item> items;
+        Character characters[0xA];
+    };
+}
+
+namespace Overlay {
+    void OpenSaveManager() {
+        Globals::SaveManagerOpen = true;
+    }
+
+    void Render() {
+        if (Globals::SaveManagerOpen) {
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
+            ImGui::Begin("Reborn Save Manager", &Globals::SaveManagerOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+            if (ImGui::Button("+ New Save", ImVec2(-1.0f, 0))) {
+
+            }
+            if (ImGui::Button("Select Save & Start Game!", ImVec2(-1.0f, 0))) {
+                Hooks::StartupCompletedHook();
+            }
+            ImGui::End();
         }
     }
 }
@@ -580,10 +631,10 @@ namespace Hooks{
     SafetyHookInline ProcessEvent;
 
     void StartupCompletedHook() {
-        std::cout << "Startup Complete!" << std::endl;
+        std::cout << "[GAME] Startup Complete!" << std::endl;
+        Globals::SaveManagerOpen = false;
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
         SDKUtils::GetLastOfClass<UPoplarPressStartGFxMovie>()->ContinueToMenu();
-        EngineLogic::ExecConsoleCommand(L"open 127.0.0.1");
     }
 
     void MainPanelClickedHook(uint32_t PanelId) {
@@ -770,7 +821,7 @@ namespace Hooks{
             startupCompleteUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerManager.StartupProcessComplete");
 
         if (function == startupCompleteUFunction) {
-            StartupCompletedHook();
+            Overlay::OpenSaveManager();
             return;
         }
 
@@ -924,6 +975,115 @@ namespace Hooks{
 
         return ret;
     }
+
+    HWND window = NULL;
+    WNDPROC oWndProc;
+    ID3D11Device* pDevice = NULL;
+    ID3D11DeviceContext* pContext = NULL;
+    ID3D11RenderTargetView* mainRenderTargetView = NULL;
+
+    SafetyHookInline ResizeBuffers;
+
+    bool init = false;
+
+    HRESULT ResizeBuffersHook(
+        IDXGISwapChain* pSwapChain,
+        UINT        BufferCount,
+        UINT        Width,
+        UINT        Height,
+        DXGI_FORMAT NewFormat,
+        UINT        SwapChainFlags
+    ) {
+        if (pSwapChain)
+        {
+            pContext->OMSetRenderTargets(0, 0, 0);
+
+            // Release all outstanding references to the swap chain's buffers.
+            mainRenderTargetView->Release();
+
+            HRESULT hr;
+            // Preserve the existing buffer count and format.
+            // Automatically choose the width and height to match the client rect for HWNDs.
+            hr = ResizeBuffers.call<HRESULT>(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
+
+            // Perform error handling here!
+
+            // Get buffer and create a render-target-view.
+            ID3D11Texture2D* pBuffer;
+            hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
+                (void**)&pBuffer);
+            // Perform error handling here!
+
+            hr = pDevice->CreateRenderTargetView(pBuffer, NULL,
+                &mainRenderTargetView);
+            // Perform error handling here!
+            pBuffer->Release();
+
+            pContext->OMSetRenderTargets(1, &mainRenderTargetView, NULL);
+
+            // Set up the viewport.
+            D3D11_VIEWPORT vp;
+            vp.Width = Width;
+            vp.Height = Height;
+            vp.MinDepth = 0.0f;
+            vp.MaxDepth = 1.0f;
+            vp.TopLeftX = 0;
+            vp.TopLeftY = 0;
+            pContext->RSSetViewports(1, &vp);
+            return 1;
+        }
+
+        return ResizeBuffers.call<HRESULT>(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
+    }
+
+    SafetyHookInline Present;
+
+    LRESULT WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+
+        if (true && ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
+            return true;
+
+        return CallWindowProc(oWndProc, hWnd, uMsg, wParam, lParam);
+    }
+
+    HRESULT PresentHook(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags) {
+        if (!init)
+        {
+            if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&pDevice)))
+            {
+                pDevice->GetImmediateContext(&pContext);
+                DXGI_SWAP_CHAIN_DESC sd;
+                pSwapChain->GetDesc(&sd);
+                window = sd.OutputWindow;
+                ID3D11Texture2D* pBackBuffer;
+                pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
+                pDevice->CreateRenderTargetView(pBackBuffer, NULL, &mainRenderTargetView);
+                pBackBuffer->Release();
+                oWndProc = (WNDPROC)SetWindowLongPtr(window, GWLP_WNDPROC, (LONG_PTR)WndProc);
+                ImGui::CreateContext();
+                ImGuiIO& io = ImGui::GetIO();
+                io.ConfigFlags = ImGuiConfigFlags_NoMouseCursorChange;
+                ImGui_ImplWin32_Init(window);
+                ImGui_ImplDX11_Init(pDevice, pContext);
+                init = true;
+            }
+
+            else
+                return Present.call<HRESULT>(pSwapChain, SyncInterval, Flags);
+        }
+
+        ImGui_ImplDX11_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+
+        Overlay::Render();
+
+        ImGui::Render();
+
+        pContext->OMSetRenderTargets(1, &mainRenderTargetView, NULL);
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+        return Present.call<HRESULT>(pSwapChain, SyncInterval, Flags);
+    }
 }
 
 namespace Init {
@@ -968,6 +1128,101 @@ namespace Init {
         Hooks::ProcessEvent = safetyhook::create_inline((void*)(Globals::baseAddress + 0x109ca0), &Hooks::ProcessEventHook);
         Hooks::ProcessRemoteFunction = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0728fd0), &Hooks::ProcessRemoteFunctionHook);
     }
+
+    void ImGUI() {
+        WNDCLASSEX windowClass;
+        windowClass.cbSize = sizeof(WNDCLASSEX);
+        windowClass.style = CS_HREDRAW | CS_VREDRAW;
+        windowClass.lpfnWndProc = DefWindowProc;
+        windowClass.cbClsExtra = 0;
+        windowClass.cbWndExtra = 0;
+        windowClass.hInstance = GetModuleHandle(NULL);
+        windowClass.hIcon = NULL;
+        windowClass.hCursor = NULL;
+        windowClass.hbrBackground = NULL;
+        windowClass.lpszMenuName = NULL;
+        windowClass.lpszClassName = L"Reborn";
+        windowClass.hIconSm = NULL;
+
+        ::RegisterClassEx(&windowClass);
+
+        HWND window = ::CreateWindow(windowClass.lpszClassName, L"Reborn DirectX Window", WS_OVERLAPPEDWINDOW, 0, 0, 100, 100, NULL, NULL, windowClass.hInstance, NULL);
+
+        HMODULE libD3D11 = nullptr;
+        
+        while (!libD3D11)
+            libD3D11 = ::GetModuleHandle(L"d3d11.dll");
+
+        void* D3D11CreateDeviceAndSwapChain;
+        D3D11CreateDeviceAndSwapChain = ::GetProcAddress(libD3D11, "D3D11CreateDeviceAndSwapChain");
+
+        D3D_FEATURE_LEVEL featureLevel;
+        const D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0 };
+
+        DXGI_RATIONAL refreshRate;
+        refreshRate.Numerator = 60;
+        refreshRate.Denominator = 1;
+
+        DXGI_MODE_DESC bufferDesc;
+        bufferDesc.Width = 100;
+        bufferDesc.Height = 100;
+        bufferDesc.RefreshRate = refreshRate;
+        bufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        bufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+        bufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+
+        DXGI_SAMPLE_DESC sampleDesc;
+        sampleDesc.Count = 1;
+        sampleDesc.Quality = 0;
+
+        DXGI_SWAP_CHAIN_DESC swapChainDesc;
+        swapChainDesc.BufferDesc = bufferDesc;
+        swapChainDesc.SampleDesc = sampleDesc;
+        swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        swapChainDesc.BufferCount = 1;
+        swapChainDesc.OutputWindow = window;
+        swapChainDesc.Windowed = 1;
+        swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+        IDXGISwapChain* swapChain;
+        ID3D11Device* device;
+        ID3D11DeviceContext* context;
+
+        ((long(__stdcall*)(
+            IDXGIAdapter*,
+            D3D_DRIVER_TYPE,
+            HMODULE,
+            UINT,
+            const D3D_FEATURE_LEVEL*,
+            UINT,
+            UINT,
+            const DXGI_SWAP_CHAIN_DESC*,
+            IDXGISwapChain**,
+            ID3D11Device**,
+            D3D_FEATURE_LEVEL*,
+            ID3D11DeviceContext**))(D3D11CreateDeviceAndSwapChain))(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels, 1, D3D11_SDK_VERSION, &swapChainDesc, &swapChain, &device, &featureLevel, &context);
+
+        Globals::methodsTable = (__int64*)::calloc(205, sizeof(__int64));
+        ::memcpy(Globals::methodsTable, *(__int64**)swapChain, 18 * sizeof(__int64));
+        ::memcpy(Globals::methodsTable + 18, *(__int64**)device, 43 * sizeof(__int64));
+        ::memcpy(Globals::methodsTable + 18 + 43, *(__int64**)context, 144 * sizeof(__int64));
+
+        swapChain->Release();
+        swapChain = NULL;
+
+        device->Release();
+        device = NULL;
+
+        context->Release();
+        context = NULL;
+
+        ::DestroyWindow(window);
+        ::UnregisterClass(windowClass.lpszClassName, windowClass.hInstance);
+        
+        Hooks::Present = safetyhook::create_inline(Globals::methodsTable[8], Hooks::PresentHook);
+        Hooks::ResizeBuffers = safetyhook::create_inline(Globals::methodsTable[13], Hooks::ResizeBuffersHook);
+    }
 }
 
 void MainThread() {
@@ -986,7 +1241,7 @@ void MainThread() {
         EngineLogic::DontPauseOnLossOfFocus();
     }
     else {
-        //ClientNetworking::JoinServer(L"127.0.0.1");
+        Init::ImGUI();
     }
 
     bool listening = false;
