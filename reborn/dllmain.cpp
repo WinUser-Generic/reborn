@@ -14,6 +14,11 @@
 #include <d3d11.h>
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
+#include "imgui/imgui_stdlib.h"
+#include <filesystem>
+#include <shlobj.h>
+#include <fstream>
+#include "json.hpp"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -59,6 +64,8 @@ namespace Globals {
     __int64* methodsTable = nullptr;
 
     bool SaveManagerOpen = false;
+
+    bool NewSaveOpen = false;
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
@@ -456,22 +463,95 @@ namespace Hooks {
 
 namespace Metagame {
     struct Item {
-        std::string itemFullName;
+        std::string itemObjectName;
         uint32_t level;
     };
 
     struct Character {
-        std::string characterName;
+        std::string characterObjectName;
         uint32_t level;
         float nextLevelProgress;
+    };
+
+    struct CharacterSkin {
+        std::string skinObjectName;
     };
 
     struct SaveFile {
         std::string name;
         bool everythingUnlocked;
         std::vector<Item> items;
-        Character characters[0xA];
+        std::vector<Character> characters;
+        std::vector<CharacterSkin> characterSkins;
+
+        SaveFile(std::string name, bool everythingUnlocked) {
+            this->name = name;
+            this->everythingUnlocked = everythingUnlocked;
+
+            this->characters = std::vector<Character>();
+            this->items = std::vector<Item>();
+            this->characterSkins = std::vector<CharacterSkin>();
+        }
     };
+
+
+    std::string GetDocumentsPath() {
+        char path[MAX_PATH];
+        if (SHGetFolderPathA(NULL, CSIDL_MYDOCUMENTS, NULL, SHGFP_TYPE_CURRENT, path) == S_OK) {
+            return std::string(path);
+        }
+        std::error_code ec = std::make_error_code(std::errc::no_such_file_or_directory);
+        throw std::filesystem::filesystem_error("Documents directory not found", "", ec);
+    }
+
+    std::string GetSavePath() {
+        for (const auto& entry : std::filesystem::directory_iterator(GetDocumentsPath() + "/My Games/Battleborn/PoplarGame/SaveData/")) {
+            if (entry.is_directory()) {
+                return entry.path().string();
+            }
+        }
+
+        std::error_code ec = std::make_error_code(std::errc::no_such_file_or_directory);
+        throw std::filesystem::filesystem_error("Battleborn SaveData directory empty", "", ec);
+    }
+
+    void WriteSave(int saveNum, const SaveFile& file) {
+        nlohmann::json jsonObj = nlohmann::json();
+
+        jsonObj["name"] = file.name;
+        jsonObj["everythingUnlocked"] = file.everythingUnlocked;
+
+        for (int i = 0; i < file.items.size(); i++) {
+            jsonObj["items"][i]["itemObjectName"] = file.items[i].itemObjectName;
+            jsonObj["items"][i]["level"] = file.items[i].level;
+        }
+
+        for (int i = 0; i < file.characters.size(); i++) {
+            jsonObj["characters"][i]["characterObjectName"] = file.characters[i].characterObjectName;
+            jsonObj["characters"][i]["level"] = file.characters[i].level;
+            jsonObj["characters"][i]["nextLevelProgress"] = file.characters[i].nextLevelProgress;
+        }
+
+        for (int i = 0; i < file.characterSkins.size(); i++) {
+            jsonObj["characterSkins"][i]["skinObjectName"] = file.characterSkins[i].skinObjectName;
+        }
+
+        std::ofstream fsFile(GetSavePath() + "/" + std::to_string(saveNum) + ".rebornsave");
+        fsFile << jsonObj.dump();
+        fsFile.close();
+    }
+
+    void CreateNewSave(std::string saveName, bool startWithEverything) {
+        static int num = 0;
+
+        while (std::filesystem::exists(GetSavePath() + "/" + std::to_string(num) + ".rebornsave")) {
+            num++;
+        }
+
+        SaveFile newSave = SaveFile(saveName, startWithEverything);
+
+        WriteSave(num, newSave);
+    }
 }
 
 namespace Overlay {
@@ -485,10 +565,30 @@ namespace Overlay {
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
             ImGui::Begin("Reborn Save Manager", &Globals::SaveManagerOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
             if (ImGui::Button("+ New Save", ImVec2(-1.0f, 0))) {
-
+                Globals::NewSaveOpen = true;
             }
             if (ImGui::Button("Select Save & Start Game!", ImVec2(-1.0f, 0))) {
                 Hooks::StartupCompletedHook();
+            }
+            ImGui::End();
+        }
+
+        if (Globals::NewSaveOpen) {
+            static std::string saveName = "";
+            static bool startWithEverything = false;
+
+            ImGui::Begin("New Save", &Globals::NewSaveOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+            ImGui::InputText("Display Name (Visible in Multiplayer & Singleplayer)", &saveName);
+            if (ImGui::RadioButton("Earn Gear, Mutations & Character Skins by Playing!", !startWithEverything)) {
+                startWithEverything = false;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Start With Everything!", startWithEverything)) {
+                startWithEverything = true;
+            }
+            if (ImGui::Button("Create Save File!", ImVec2(-1.0f, 0))) {
+                Globals::NewSaveOpen = false;
+                Metagame::CreateNewSave(saveName, startWithEverything);
             }
             ImGui::End();
         }
