@@ -541,8 +541,59 @@ namespace Metagame {
         fsFile.close();
     }
 
+    SaveFile ReadSave(int saveNum) {
+        std::ifstream fsFile(GetSavePath() + "/" + std::to_string(saveNum) + ".rebornsave");
+        nlohmann::json jsonObj;
+        fsFile >> jsonObj;
+        fsFile.close();
+
+        std::string name = jsonObj["name"];
+        bool everythingUnlocked = jsonObj["everythingUnlocked"];
+        SaveFile saveFile(name, everythingUnlocked);
+
+        if (jsonObj.contains("items")) {
+            for (const auto& itemJson : jsonObj["items"]) {
+                Item item;
+                item.itemObjectName = itemJson["itemObjectName"];
+                item.level = itemJson["level"];
+                saveFile.items.push_back(item);
+            }
+        }
+
+        if (jsonObj.contains("characters")) {
+            for (const auto& characterJson : jsonObj["characters"]) {
+                Character character;
+                character.characterObjectName = characterJson["characterObjectName"];
+                character.level = characterJson["level"];
+                character.nextLevelProgress = characterJson["nextLevelProgress"];
+                saveFile.characters.push_back(character);
+            }
+        }
+
+        if (jsonObj.contains("characterSkins")) {
+            for (const auto& skinJson : jsonObj["characterSkins"]) {
+                CharacterSkin skin;
+                skin.skinObjectName = skinJson["skinObjectName"];
+                saveFile.characterSkins.push_back(skin);
+            }
+        }
+    }
+
+    std::vector<SaveFile> ReadAllSaves() {
+        std::vector<SaveFile> saveFiles = std::vector<SaveFile>();
+
+        int num = 0;
+
+        while (std::filesystem::exists(GetSavePath() + "/" + std::to_string(num) + ".rebornsave")) {
+            saveFiles.push_back(ReadSave(num));
+            num++;
+        }
+
+        return saveFiles;
+    }
+
     void CreateNewSave(std::string saveName, bool startWithEverything) {
-        static int num = 0;
+        int num = 0;
 
         while (std::filesystem::exists(GetSavePath() + "/" + std::to_string(num) + ".rebornsave")) {
             num++;
@@ -561,14 +612,27 @@ namespace Overlay {
 
     void Render() {
         if (Globals::SaveManagerOpen) {
+            static int selectedSave = 0;
+            static std::vector<Metagame::SaveFile> saveFiles = Metagame::ReadAllSaves();
+
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
             ImGui::Begin("Reborn Save Manager", &Globals::SaveManagerOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
             if (ImGui::Button("+ New Save", ImVec2(-1.0f, 0))) {
                 Globals::NewSaveOpen = true;
             }
-            if (ImGui::Button("Select Save & Start Game!", ImVec2(-1.0f, 0))) {
-                Hooks::StartupCompletedHook();
+            for (int i = 0; i < saveFiles.size(); i++) {
+                if (ImGui::RadioButton(saveFiles[i].name.c_str(), selectedSave == i)) {
+                    selectedSave = i;
+                }
+            }
+            if (saveFiles.size() > 0) {
+                if (ImGui::Button("Select Save & Start Game!", ImVec2(-1.0f, 0))) {
+                    Hooks::StartupCompletedHook();
+                }
+            }
+            else {
+                ImGui::Text("No saves found, create one!");
             }
             ImGui::End();
         }
