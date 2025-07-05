@@ -22,6 +22,40 @@
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+namespace Metagame {
+    struct Item {
+        std::string itemObjectName;
+        uint32_t level;
+    };
+
+    struct Character {
+        std::string characterObjectName;
+        uint32_t level;
+        float nextLevelProgress;
+    };
+
+    struct CharacterSkin {
+        std::string skinObjectName;
+    };
+
+    struct SaveFile {
+        std::string name;
+        bool everythingUnlocked;
+        std::vector<Item> items;
+        std::vector<Character> characters;
+        std::vector<CharacterSkin> characterSkins;
+
+        SaveFile(std::string name, bool everythingUnlocked) {
+            this->name = name;
+            this->everythingUnlocked = everythingUnlocked;
+
+            this->characters = std::vector<Character>();
+            this->items = std::vector<Item>();
+            this->characterSkins = std::vector<CharacterSkin>();
+        }
+    };
+}
+
 namespace Settings {
     int32_t gamePort = 7777;
 
@@ -66,6 +100,8 @@ namespace Globals {
     bool SaveManagerOpen = false;
 
     bool NewSaveOpen = false;
+
+    std::vector<Metagame::SaveFile> saveFiles = std::vector<Metagame::SaveFile>();
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
@@ -462,39 +498,6 @@ namespace Hooks {
 }
 
 namespace Metagame {
-    struct Item {
-        std::string itemObjectName;
-        uint32_t level;
-    };
-
-    struct Character {
-        std::string characterObjectName;
-        uint32_t level;
-        float nextLevelProgress;
-    };
-
-    struct CharacterSkin {
-        std::string skinObjectName;
-    };
-
-    struct SaveFile {
-        std::string name;
-        bool everythingUnlocked;
-        std::vector<Item> items;
-        std::vector<Character> characters;
-        std::vector<CharacterSkin> characterSkins;
-
-        SaveFile(std::string name, bool everythingUnlocked) {
-            this->name = name;
-            this->everythingUnlocked = everythingUnlocked;
-
-            this->characters = std::vector<Character>();
-            this->items = std::vector<Item>();
-            this->characterSkins = std::vector<CharacterSkin>();
-        }
-    };
-
-
     std::string GetDocumentsPath() {
         char path[MAX_PATH];
         if (SHGetFolderPathA(NULL, CSIDL_MYDOCUMENTS, NULL, SHGFP_TYPE_CURRENT, path) == S_OK) {
@@ -577,6 +580,8 @@ namespace Metagame {
                 saveFile.characterSkins.push_back(skin);
             }
         }
+
+        return saveFile;
     }
 
     std::vector<SaveFile> ReadAllSaves() {
@@ -602,18 +607,22 @@ namespace Metagame {
         SaveFile newSave = SaveFile(saveName, startWithEverything);
 
         WriteSave(num, newSave);
+
+        Sleep(500);
+
+        Globals::saveFiles = Metagame::ReadAllSaves();
     }
 }
 
 namespace Overlay {
     void OpenSaveManager() {
+        Globals::saveFiles = Metagame::ReadAllSaves();
         Globals::SaveManagerOpen = true;
     }
 
     void Render() {
         if (Globals::SaveManagerOpen) {
             static int selectedSave = 0;
-            static std::vector<Metagame::SaveFile> saveFiles = Metagame::ReadAllSaves();
 
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
@@ -621,12 +630,12 @@ namespace Overlay {
             if (ImGui::Button("+ New Save", ImVec2(-1.0f, 0))) {
                 Globals::NewSaveOpen = true;
             }
-            for (int i = 0; i < saveFiles.size(); i++) {
-                if (ImGui::RadioButton(saveFiles[i].name.c_str(), selectedSave == i)) {
+            for (int i = 0; i < Globals::saveFiles.size(); i++) {
+                if (ImGui::RadioButton(Globals::saveFiles[i].name.c_str(), selectedSave == i)) {
                     selectedSave = i;
                 }
             }
-            if (saveFiles.size() > 0) {
+            if (Globals::saveFiles.size() > 0) {
                 if (ImGui::Button("Select Save & Start Game!", ImVec2(-1.0f, 0))) {
                     Hooks::StartupCompletedHook();
                 }
