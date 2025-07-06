@@ -217,6 +217,34 @@ namespace Metagame {
         std::string itemDescription;
         uint32_t level;
 
+        static std::string ParsePrefix(UPoplarPerkFunction* perk) {
+            if (perk->DisplayNamePrefix.size() > 4) {
+                std::string input = perk->DisplayNamePrefix.ToString();
+
+                std::unordered_map<std::string, std::string> replacements = {
+                    {"$FLAWED$", "Flawed"},
+                    {"$LEGENDARY$", "Legendary"},
+                    {"$RARE$", "Rare"},
+                    {"$VERYRARE$", "Very Rare"},
+                    {"$COMMON$", "Common"},
+                    {"$EPIC$", "Epic"},
+                    {"$UNCOMMON$", "Uncommon"}
+                };
+
+                for (const auto& pair : replacements) {
+                    size_t pos = 0;
+                    while ((pos = input.find(pair.first, pos)) != std::string::npos) {
+                        input.replace(pos, pair.first.length(), pair.second);
+                        pos += pair.second.length();
+                    }
+                }
+
+                return input + " ";
+            }
+
+            return "";
+        }
+
         Item() {
             itemObjectName = "";
             itemDisplayName = "";
@@ -227,17 +255,17 @@ namespace Metagame {
 
         Item(UPoplarPerkFunction* perk) {
             itemObjectName = perk->GetFullName();
-            itemDisplayName = perk->DisplayNamePrefix.ToString() + " " + perk->DisplayName.ToString() + " " + perk->DisplayNameSuffix.ToString();
-            itemFlavor = perk->ShortDescription.ToString();
-            itemDescription = perk->LongDescription.ToString();
+            itemDisplayName = ParsePrefix(perk) + perk->DisplayName.ToString();
+            itemFlavor = perk->LongDescription.ToString();
+            // TODO: Actual item descriptions
             level = 0;
         }
 
         Item(UPoplarPerkFunction* perk, uint32_t level) {
             itemObjectName = perk->GetFullName();
-            itemDisplayName = perk->DisplayNamePrefix.ToString() + " " + perk->DisplayName.ToString() + " " + perk->DisplayNameSuffix.ToString();
-            itemFlavor = perk->ShortDescription.ToString();
-            itemDescription = perk->LongDescription.ToString();
+            itemDisplayName = ParsePrefix(perk) + perk->DisplayName.ToString();
+            itemFlavor = perk->LongDescription.ToString();
+            // TODO: Actual item descriptions
             this->level = level;
         }
     };
@@ -344,6 +372,10 @@ namespace Globals {
     unsigned int CurrentSaveFile = 0;
 
     std::string selectedCharacter = "ModernSoldier";
+
+    static Metagame::Item* GearSlotOne = nullptr;
+    static Metagame::Item* GearSlotTwo = nullptr;
+    static Metagame::Item* GearSlotThree = nullptr;
 
     enum ELaunchSequenceState : int8_t {
         NotOpen = 0,
@@ -879,6 +911,15 @@ namespace Metagame {
         if (startWithEverything) {
             for (UPoplarPerkFunction* perk : SDKUtils::GetAllOfClass<UPoplarPerkFunction>()) {
                 if (!perk->GetFullName().contains("Default")) {
+                    bool contains = false;
+
+                    for (const auto& cmp : newSave.items) {
+                        if (cmp.itemDisplayName == Item::ParsePrefix(perk) + perk->DisplayName.ToString()) {
+                            contains = true;
+                            break;
+                        }
+                    }
+
                     newSave.items.push_back(Item(perk));
                 }
             }
@@ -927,6 +968,14 @@ namespace Overlay {
         Globals::SaveManagerOpen = true;
     }
 
+    std::string GetItemDisplayName(const Metagame::Item* item) {
+        if (item) {
+            return item->itemDisplayName;
+        }
+
+        return "No Item";
+    }
+
     void Render() {
         if (Globals::LaunchSequenceState > Globals::ELaunchSequenceState::NotOpen) {
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
@@ -957,14 +1006,119 @@ namespace Overlay {
             }
 
             if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
-                
-
                 for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characters.size(); i++) {
                     const Metagame::Character& character = Globals::saveFiles[Globals::CurrentSaveFile].characters[i];
                     if (ImGui::RadioButton((Constants::CharacterLookupTable[character.characterDisplayName] + " - Level " + std::to_string(character.level) + "/10").c_str(), character.characterDisplayName == Globals::selectedCharacter)) {
                         Globals::selectedCharacter = character.characterDisplayName;
                     };
                 }
+            }
+            else if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
+                ImGui::PushID("ItemSlotOne");
+
+                static std::string displayOne = "No Item";
+
+                displayOne = GetItemDisplayName(Globals::GearSlotOne);
+
+                if (ImGui::BeginCombo("Gear Slot One", "Select Gear For Gear Slot One", ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                    if (ImGui::Selectable("No Item", Globals::GearSlotOne == nullptr)) {
+                        Globals::GearSlotOne = nullptr;
+                    }
+
+                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                        Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                        if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotOne == &item)) {
+                            Globals::GearSlotOne = &item;
+                        }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::BeginTooltip();
+                            ImGui::Text(item.itemDisplayName.c_str());
+                            ImGui::Separator();
+                            ImGui::Text(item.itemFlavor.c_str());
+                            ImGui::EndTooltip();
+                        }
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::PopID();
+
+                ImGui::SameLine();
+                ImGui::Text(displayOne.c_str());
+
+                ImGui::PushID("ItemSlotTwo");
+
+                static std::string DisplayTwo = "No Item";
+
+                DisplayTwo = GetItemDisplayName(Globals::GearSlotTwo);
+
+                if (ImGui::BeginCombo("Gear Slot Two", "Select Gear For Gear Slot Two", ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+
+                    if (ImGui::Selectable("No Item", Globals::GearSlotTwo == nullptr)) {
+                        Globals::GearSlotTwo = nullptr;
+                    }
+
+                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                        Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                        if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotTwo == &item)) {
+                            Globals::GearSlotTwo = &item;
+                        }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::BeginTooltip();
+                            ImGui::Text(item.itemDisplayName.c_str());
+                            ImGui::Separator();
+                            ImGui::Text(item.itemFlavor.c_str());
+                            ImGui::EndTooltip();
+                        }
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::PopID();
+
+                ImGui::SameLine();
+                ImGui::Text(DisplayTwo.c_str());
+
+                ImGui::PushID("ItemSlotThree");
+
+                static std::string DisplayThree = "No Item";
+
+                DisplayThree = GetItemDisplayName(Globals::GearSlotThree);
+
+                if (ImGui::BeginCombo("Gear Slot Three", "Select Gear For Gear Slot Three", ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                    ImGui::SameLine();
+                    ImGui::Text(DisplayThree.c_str());
+                    
+                    if (ImGui::Selectable("No Item", Globals::GearSlotThree == nullptr)) {
+                        Globals::GearSlotThree = nullptr;
+                    }
+
+                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                        Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                        if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotThree == &item)) {
+                            Globals::GearSlotThree = &item;
+                        }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::BeginTooltip();
+                            ImGui::Text(item.itemDisplayName.c_str());
+                            ImGui::Separator();
+                            ImGui::Text(item.itemFlavor.c_str());
+                            ImGui::EndTooltip();
+                        }
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::PopID();
+
+                ImGui::SameLine();
+                ImGui::Text(DisplayThree.c_str());
             }
 
             ImGui::SetWindowFontScale(1.0f);
@@ -1243,7 +1397,52 @@ namespace Hooks{
                         }
                     }
 
-                    // TODO: Gear here too...
+                    if (Globals::GearSlotOne) {
+                        
+                        ppc->MyPoplarPRI->Perks[0].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotOne->itemObjectName), Globals::GetGWorld());
+                        ppc->MyPoplarPRI->Perks[0].PerkFunction->ItemLevelOverride = Globals::GearSlotOne->level;
+                        ppc->MyPoplarPRI->Perks[0].PerkFunction->bUseItemLevelOverride = true;
+                        ppc->MyPoplarPRI->Perks[0].MetaID = ppc->MyPoplarPRI->Perks[0].PerkFunction->MetaContentID;
+                        ppc->MyPoplarPRI->Perks[0].AssetKey = ppc->MyPoplarPRI->Perks[0].PerkFunction->AssetTrackerKey;
+                        ppc->MyPoplarPRI->Perks[0].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotOne->itemObjectName);
+                        ppc->MyPoplarPRI->Perks[0].ItemLevel = Globals::GearSlotOne->level;
+
+                        Globals::GearSlotOne = nullptr;
+                    }
+
+                    if (Globals::GearSlotTwo) {
+                        ppc->MyPoplarPRI->Perks[1].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotTwo->itemObjectName), Globals::GetGWorld());;
+                        ppc->MyPoplarPRI->Perks[1].PerkFunction->ItemLevelOverride = Globals::GearSlotTwo->level;
+                        ppc->MyPoplarPRI->Perks[1].PerkFunction->bUseItemLevelOverride = true;
+                        ppc->MyPoplarPRI->Perks[1].MetaID = ppc->MyPoplarPRI->Perks[1].PerkFunction->MetaContentID;
+                        ppc->MyPoplarPRI->Perks[1].AssetKey = ppc->MyPoplarPRI->Perks[1].PerkFunction->AssetTrackerKey;
+                        ppc->MyPoplarPRI->Perks[1].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotTwo->itemObjectName);
+                        ppc->MyPoplarPRI->Perks[1].ItemLevel = Globals::GearSlotTwo->level;
+
+                        Globals::GearSlotTwo = nullptr;
+                    }
+
+                    if (Globals::GearSlotThree) {
+                        ppc->MyPoplarPRI->Perks[2].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotThree->itemObjectName), Globals::GetGWorld());
+                        ppc->MyPoplarPRI->Perks[2].PerkFunction->ItemLevelOverride = Globals::GearSlotThree->level;
+                        ppc->MyPoplarPRI->Perks[2].PerkFunction->bUseItemLevelOverride = true;
+                        ppc->MyPoplarPRI->Perks[2].MetaID = ppc->MyPoplarPRI->Perks[2].PerkFunction->MetaContentID;
+                        ppc->MyPoplarPRI->Perks[2].AssetKey = ppc->MyPoplarPRI->Perks[2].PerkFunction->AssetTrackerKey;
+                        ppc->MyPoplarPRI->Perks[2].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotThree->itemObjectName);
+                        ppc->MyPoplarPRI->Perks[2].ItemLevel = Globals::GearSlotThree->level;
+
+                        Globals::GearSlotThree = nullptr;
+                    }
+
+                    ppc->MyPoplarPRI->OnRep_Perks(0, ppc->MyPoplarPRI->Perks[0]);
+                    ppc->MyPoplarPRI->OnRep_Perks(1, ppc->MyPoplarPRI->Perks[1]);
+                    ppc->MyPoplarPRI->OnRep_Perks(2, ppc->MyPoplarPRI->Perks[2]);
                 }
             }
         }
@@ -1746,6 +1945,51 @@ namespace Hooks{
 
         if (true && ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
             return true;
+
+        ImGuiIO& io = ImGui::GetIO();
+
+        switch (uMsg)
+        {
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP:
+        case WM_XBUTTONDOWN:
+        case WM_XBUTTONUP:
+        {
+            if (io.WantCaptureMouse)
+                return true;
+            break;
+        }
+
+        case WM_MOUSEWHEEL:
+        case WM_MOUSEHWHEEL:
+        {
+            if (io.WantCaptureMouse)
+                return true;
+            break;
+        }
+
+        case WM_KEYDOWN:
+        case WM_KEYUP:
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP:
+        case WM_CHAR:
+        {
+            if (io.WantCaptureKeyboard)
+                return true;
+            break;
+        }
+
+        case WM_MOUSEMOVE:
+        {
+            if (io.WantCaptureMouse)
+                return true;
+            break;
+        }
+        }
 
         return CallWindowProc(oWndProc, hWnd, uMsg, wParam, lParam);
     }
