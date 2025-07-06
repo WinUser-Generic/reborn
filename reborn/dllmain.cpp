@@ -49,7 +49,7 @@ namespace Constants {
             "Pendles"
         },
         {
-            "DarkAssasin",
+            "DarkAssassin",
             "Deande"
         },
         {
@@ -312,6 +312,8 @@ namespace Globals {
     std::vector<Metagame::SaveFile> saveFiles = std::vector<Metagame::SaveFile>();
 
     unsigned int CurrentSaveFile = 0;
+
+    std::string selectedCharacter = "ModernSoldier";
 
     enum ELaunchSequenceState : int8_t {
         NotOpen = 0,
@@ -897,11 +899,13 @@ namespace Overlay {
             }
 
             if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
-                static std::string selectedCharacter = "ModernSoldier";
+                
 
                 for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characters.size(); i++) {
                     const Metagame::Character& character = Globals::saveFiles[Globals::CurrentSaveFile].characters[i];
-                    ImGui::RadioButton(character.characterDisplayName.c_str(), character.characterDisplayName == selectedCharacter);
+                    if (ImGui::RadioButton((Constants::CharacterLookupTable[character.characterDisplayName] + " - Level " + std::to_string(character.level) + "/10").c_str(), character.characterDisplayName == Globals::selectedCharacter)) {
+                        Globals::selectedCharacter = character.characterDisplayName;
+                    };
                 }
             }
 
