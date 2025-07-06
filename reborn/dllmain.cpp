@@ -216,6 +216,30 @@ namespace Metagame {
         std::string itemFlavor;
         std::string itemDescription;
         uint32_t level;
+
+        Item() {
+            itemObjectName = "";
+            itemDisplayName = "";
+            itemFlavor = "";
+            itemDescription = "";
+            level = 0;
+        }
+
+        Item(UPoplarPerkFunction* perk) {
+            itemObjectName = perk->GetFullName();
+            itemDisplayName = perk->DisplayNamePrefix.ToString() + " " + perk->DisplayName.ToString() + " " + perk->DisplayNameSuffix.ToString();
+            itemFlavor = perk->ShortDescription.ToString();
+            itemDescription = perk->LongDescription.ToString();
+            level = 0;
+        }
+
+        Item(UPoplarPerkFunction* perk, uint32_t level) {
+            itemObjectName = perk->GetFullName();
+            itemDisplayName = perk->DisplayNamePrefix.ToString() + " " + perk->DisplayName.ToString() + " " + perk->DisplayNameSuffix.ToString();
+            itemFlavor = perk->ShortDescription.ToString();
+            itemDescription = perk->LongDescription.ToString();
+            this->level = level;
+        }
     };
 
     struct Character {
@@ -848,6 +872,14 @@ namespace Metagame {
                 }
                 else {
                     newSave.characters.push_back(Character(classID->GetFullName(), classID->CharacterClassId->ClassName.ToString()));
+                }
+            }
+        }
+
+        if (startWithEverything) {
+            for (UPoplarPerkFunction* perk : SDKUtils::GetAllOfClass<UPoplarPerkFunction>()) {
+                if (!perk->GetFullName().contains("Default")) {
+                    newSave.items.push_back(Item(perk));
                 }
             }
         }

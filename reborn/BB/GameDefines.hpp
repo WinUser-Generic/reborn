@@ -20,6 +20,7 @@
 #include <thread>
 #include <vector>
 #include <map>
+#include <algorithm>
 
 /*
 # ========================================================================================= #
@@ -824,12 +825,51 @@ public:
 		return *this;
 	}
 
+	// Pasted evil
+	static std::wstring removeInvalidUTF16(const std::wstring& input) {
+		std::wstring result;
+		result.reserve(input.size());
+
+		for (size_t i = 0; i < input.size(); ++i) {
+			wchar_t current = input[i];
+
+			if (current >= 0xD800 && current <= 0xDBFF) {
+
+				if (i + 1 < input.size()) {
+					wchar_t next = input[i + 1];
+					if (next >= 0xDC00 && next <= 0xDFFF) {
+
+						result += current;
+						result += next;
+						i++;
+					}
+					else {
+
+					}
+				}
+				else {
+
+				}
+			}
+			else if (current >= 0xDC00 && current <= 0xDFFF) {
+
+			}
+			else {
+
+				result += current;
+			}
+		}
+
+		return result;
+	}
+
 	std::string ToString() const
 	{
 		if (!empty())
 		{
 			std::wstring wstring = std::wstring((wchar_t*)c_str());
-			return std::string(wstring.begin(), wstring.end());
+			std::wstring cleanWString = removeInvalidUTF16(wstring);
+			return std::string(cleanWString.begin(), cleanWString.end());
 		}
 
 		return "";

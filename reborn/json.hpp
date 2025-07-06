@@ -19229,11 +19229,7 @@ class serializer
                 {
                     switch (error_handler)
                     {
-                        case error_handler_t::strict:
-                        {
-                            JSON_THROW(type_error::create(316, concat("invalid UTF-8 byte at index ", std::to_string(i), ": 0x", hex_bytes(byte | 0)), nullptr));
-                        }
-
+                        case error_handler_t::strict: // yes I'm evil for this, no I don't want to fix it any other way
                         case error_handler_t::ignore:
                         case error_handler_t::replace:
                         {
