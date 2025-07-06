@@ -23,6 +23,129 @@
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 namespace Constants {
+    std::unordered_map<std::string, std::string> CharacterLookupTable = {
+        {
+            "AssaultJump",
+            "Caldarius"
+        },
+        {
+            "Blackguard",
+            "Galilea"
+        },
+        {
+            "Bombirdier",
+            "Ernest"
+        },
+        {
+            "BoyAndDjinn",
+            "Shayne & Aurox"
+        },
+        {
+            "ChaosMage",
+            "Orendi"
+        },
+        {
+            "CornerSneaker",
+            "Pendles"
+        },
+        {
+            "DarkAssasin",
+            "Deande"
+        },
+        {
+            "DarkElfRanger",
+            "Thorn"
+        },
+        {
+            "DeathBlade",
+            "Rath"
+        },
+        {
+            "DwarvenWarrior",
+            "Boldur"
+        },
+        {
+            "GentSniper",
+            "Marquis"
+        },
+        {
+            "IceGolem",
+            "Kelvin"
+        },
+        {
+            "LeapingLuchador",
+            "El Dragon"
+        },
+        {
+            "MachineGunner",
+            "Montana"
+        },
+        {
+            "MageBlade",
+            "Phoebe"
+        },
+        {
+            "ModernSoldier",
+            "Oscar Mike"
+        },
+        {
+            "MutantFist",
+            "Mellka"
+        },
+        {
+            "PapaShotgun",
+            "Ghalt"
+        },
+        {
+            "PenguinMech",
+            "Toby"
+        },
+        {
+            "PlagueBringer",
+            "Beatrix"
+        },
+        {
+            "RocketHawk",
+            "Benedict"
+        },
+        {
+            "RogueCommander",
+            "Reyna"
+        },
+        {
+            "RogueSoldier",
+            "Whiskey Foxtrot"
+        },
+        {
+            "SideKick",
+            "Kid Ultra"
+        },
+        {
+            "SoulCollector",
+            "Attikus"
+        },
+        {
+            "SpiritMech",
+            "ISIC"
+        },
+        {
+            "SunPriestess",
+            "Ambra"
+        },
+        {
+            "TacticalBuilder",
+            "Kleese"
+        },
+        {
+            "TribalHealer",
+            "Miko"
+        },
+        {
+            "WaterMonk",
+            "Alani"
+        }
+    };
+
     namespace PvAIMaps {
         std::vector<std::pair<std::string, const wchar_t*>> Supercharge = {
             {
@@ -89,16 +212,35 @@ namespace Constants {
 namespace Metagame {
     struct Item {
         std::string itemObjectName;
+        std::string itemDisplayName;
+        std::string itemFlavor;
+        std::string itemDescription;
         uint32_t level;
     };
 
     struct Character {
         std::string characterObjectName;
+        std::string characterDisplayName;
         uint32_t level;
         float nextLevelProgress;
+
+        Character(std::string characterObjectName, std::string characterDisplayName) {
+            this->characterDisplayName = characterDisplayName;
+            this->characterObjectName = characterObjectName;
+            this->level = 0;
+            this->nextLevelProgress = 0.0;
+        }
+
+        Character(std::string characterObjectName, std::string characterDisplayName, uint32_t level, float nextLevelProgress) {
+            this->characterDisplayName = characterDisplayName;
+            this->characterObjectName = characterObjectName;
+            this->level = level;
+            this->nextLevelProgress = nextLevelProgress;
+        }
     };
 
     struct CharacterSkin {
+        std::string skinDisplayName;
         std::string skinObjectName;
     };
 
@@ -168,6 +310,18 @@ namespace Globals {
     bool SoloVSAIOpen = false;
 
     std::vector<Metagame::SaveFile> saveFiles = std::vector<Metagame::SaveFile>();
+
+    unsigned int CurrentSaveFile = 0;
+
+    enum ELaunchSequenceState : int8_t {
+        NotOpen = 0,
+        CharacterSelect = 1,
+        GearSelect = 2
+    };
+
+    ELaunchSequenceState LaunchSequenceState = ELaunchSequenceState::NotOpen;
+
+    const wchar_t* LaunchCommand = nullptr;
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
@@ -586,22 +740,26 @@ namespace Metagame {
 
     void WriteSave(int saveNum, const SaveFile& file) {
         nlohmann::json jsonObj = nlohmann::json();
-
         jsonObj["name"] = file.name;
         jsonObj["everythingUnlocked"] = file.everythingUnlocked;
 
         for (int i = 0; i < file.items.size(); i++) {
             jsonObj["items"][i]["itemObjectName"] = file.items[i].itemObjectName;
+            jsonObj["items"][i]["itemDisplayName"] = file.items[i].itemDisplayName;
+            jsonObj["items"][i]["itemFlavor"] = file.items[i].itemFlavor;
+            jsonObj["items"][i]["itemDescription"] = file.items[i].itemDescription;
             jsonObj["items"][i]["level"] = file.items[i].level;
         }
 
         for (int i = 0; i < file.characters.size(); i++) {
             jsonObj["characters"][i]["characterObjectName"] = file.characters[i].characterObjectName;
+            jsonObj["characters"][i]["characterDisplayName"] = file.characters[i].characterDisplayName;
             jsonObj["characters"][i]["level"] = file.characters[i].level;
             jsonObj["characters"][i]["nextLevelProgress"] = file.characters[i].nextLevelProgress;
         }
 
         for (int i = 0; i < file.characterSkins.size(); i++) {
+            jsonObj["characterSkins"][i]["skinDisplayName"] = file.characterSkins[i].skinDisplayName;
             jsonObj["characterSkins"][i]["skinObjectName"] = file.characterSkins[i].skinObjectName;
         }
 
@@ -624,6 +782,9 @@ namespace Metagame {
             for (const auto& itemJson : jsonObj["items"]) {
                 Item item;
                 item.itemObjectName = itemJson["itemObjectName"];
+                item.itemDisplayName = itemJson["itemDisplayName"];
+                item.itemFlavor = itemJson["itemFlavor"];
+                item.itemDescription = itemJson["itemDescription"];
                 item.level = itemJson["level"];
                 saveFile.items.push_back(item);
             }
@@ -631,8 +792,7 @@ namespace Metagame {
 
         if (jsonObj.contains("characters")) {
             for (const auto& characterJson : jsonObj["characters"]) {
-                Character character;
-                character.characterObjectName = characterJson["characterObjectName"];
+                Character character(characterJson["characterObjectName"], characterJson["characterDisplayName"]);
                 character.level = characterJson["level"];
                 character.nextLevelProgress = characterJson["nextLevelProgress"];
                 saveFile.characters.push_back(character);
@@ -642,6 +802,7 @@ namespace Metagame {
         if (jsonObj.contains("characterSkins")) {
             for (const auto& skinJson : jsonObj["characterSkins"]) {
                 CharacterSkin skin;
+                skin.skinDisplayName = skinJson["skinDisplayName"];
                 skin.skinObjectName = skinJson["skinObjectName"];
                 saveFile.characterSkins.push_back(skin);
             }
@@ -672,6 +833,17 @@ namespace Metagame {
 
         SaveFile newSave = SaveFile(saveName, startWithEverything);
 
+        for (UPoplarPlayerClassIdentifierDefinition* classID : SDKUtils::GetAllOfClass<UPoplarPlayerClassIdentifierDefinition>()) {
+            if (!classID->GetFullName().contains("Default")) {
+                if (startWithEverything) {
+                    newSave.characters.push_back(Character(classID->GetFullName(), classID->ClassName.ToString(), 10, 1.0f));
+                }
+                else {
+                    newSave.characters.push_back(Character(classID->GetFullName(), classID->ClassName.ToString()));
+                }
+            }
+        }
+
         WriteSave(num, newSave);
 
         Sleep(500);
@@ -681,6 +853,11 @@ namespace Metagame {
 }
 
 namespace Overlay {
+    void StartLaunchSequence(const wchar_t* command) {
+        Globals::LaunchSequenceState = Globals::ELaunchSequenceState::CharacterSelect;
+        Globals::LaunchCommand = command;
+    }
+
     void OpenSoloVSAI() {
         Globals::SoloVSAIOpen = true;
     }
@@ -691,6 +868,73 @@ namespace Overlay {
     }
 
     void Render() {
+        if (Globals::LaunchSequenceState > Globals::ELaunchSequenceState::NotOpen) {
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
+            ImGui::Begin("Launch Sequence", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            ImVec2 textSize;
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
+                textSize = ImGui::CalcTextSize("Select a Character");
+            }
+            else if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
+                textSize = ImGui::CalcTextSize("Select your Gear");
+            }
+
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+
+            float centerX = (windowWidth - textSize.x) * 0.5f;
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
+
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
+                ImGui::Text("Select a Character");
+            }
+            else if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
+                ImGui::Text("Select your Gear");
+            }
+
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
+                static std::string selectedCharacter = "ModernSoldier";
+
+                for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characters.size(); i++) {
+                    const Metagame::Character& character = Globals::saveFiles[Globals::CurrentSaveFile].characters[i];
+                    ImGui::RadioButton(character.characterDisplayName.c_str(), character.characterDisplayName == selectedCharacter);
+                }
+            }
+
+            ImGui::SetWindowFontScale(1.0f);
+
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
+                if (ImGui::Button("Close")) {
+                    Globals::LaunchSequenceState = Globals::ELaunchSequenceState::NotOpen;
+                }
+            }
+            else {
+                if (ImGui::Button("Back")) {
+                    Globals::LaunchSequenceState = (Globals::ELaunchSequenceState)(Globals::LaunchSequenceState - 1);
+                }
+            }
+
+            ImGui::SameLine();
+
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
+                if (ImGui::Button("Start!")) {
+                    Globals::LaunchSequenceState = Globals::ELaunchSequenceState::NotOpen;
+                    EngineLogic::ExecConsoleCommand(Globals::LaunchCommand);
+                }
+            }
+            else {
+                if (ImGui::Button("Next")) {
+                    Globals::LaunchSequenceState = (Globals::ELaunchSequenceState)(Globals::LaunchSequenceState + 1);
+                }
+            }
+
+            ImGui::End();
+        }
+
         if (Globals::SaveManagerOpen) {
             static int selectedSave = 0;
 
@@ -790,7 +1034,7 @@ namespace Overlay {
 
             if (commandToExecute != nullptr) {
                 if (ImGui::Button("Play!", ImVec2(-1.0f, 0))) {
-                    EngineLogic::ExecConsoleCommand(commandToExecute);
+                    StartLaunchSequence(commandToExecute);
                     commandToExecute = nullptr;
                     Globals::SoloVSAIOpen = false;
                 }
@@ -1299,13 +1543,6 @@ namespace Hooks{
             std::cout << "[GAME] Running world switch behaviors!" << std::endl;
             Globals::AugStatus.clear();
             Globals::ppcsWeSetupAugsFor.clear();
-
-            /*
-            if (cachedGCa1) {
-                std::cout << "[GAME] Running manual GC!" << std::endl;
-                DoGC(cachedGCa1, cachedGCa2);
-            }
-            */
         }
 
         bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
