@@ -22,6 +22,70 @@
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+namespace Constants {
+    namespace PvAIMaps {
+        std::vector<std::pair<std::string, const wchar_t*>> Supercharge = {
+            {
+                "Supercharge - Ziggurat", L"open Wishbone_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Supercharge - Horizon", L"open Ripple_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Supercharge - Permafrost", L"open Cascade_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            }
+        };
+
+        std::vector < std::pair<std::string, const wchar_t*>> Incursion = {
+            {
+                "Incursion - Echelon", L"open Viaduct_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Incursion - Monuments", L"open Snowdrift_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Incursion - Overgrowth", L"open Inc_Stronghold2_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            }
+        };
+
+        std::vector < std::pair<std::string, const wchar_t*>> Capture = {
+            {
+                "Capture - Outback", L"open Ravine_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Capture - Snowblind", L"open Snowblind_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Capture - Temples", L"open BlissRuins_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            }
+        };
+
+        std::vector < std::pair<std::string, const wchar_t*>> Meltdown = {
+            {
+                "Meltdown - Outskirts", L"open SlumScort_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Meltdown - Paradise", L"open Skirmish_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Meltdown - Coldsnap", L"open IceScort_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            }
+        };
+
+        std::vector < std::pair<std::string, const wchar_t*>> FaceOff = {
+            {
+                "Face-Off - Snowblind", L"open Snowblind_Headhunter_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Face-Off - Outback", L"open Ravine_Headhunter_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            },
+            {
+                "Face-Off - Temples", L"open BlissRuins_Headhunter_P?SpawnBotsTeamA=5?SpawnBotsTeamB=5"
+            }
+        };
+    }
+}
+
 namespace Metagame {
     struct Item {
         std::string itemObjectName;
@@ -100,6 +164,8 @@ namespace Globals {
     bool SaveManagerOpen = false;
 
     bool NewSaveOpen = false;
+
+    bool SoloVSAIOpen = false;
 
     std::vector<Metagame::SaveFile> saveFiles = std::vector<Metagame::SaveFile>();
 
@@ -615,6 +681,10 @@ namespace Metagame {
 }
 
 namespace Overlay {
+    void OpenSoloVSAI() {
+        Globals::SoloVSAIOpen = true;
+    }
+
     void OpenSaveManager() {
         Globals::saveFiles = Metagame::ReadAllSaves();
         Globals::SaveManagerOpen = true;
@@ -637,12 +707,98 @@ namespace Overlay {
             }
             if (Globals::saveFiles.size() > 0) {
                 if (ImGui::Button("Select Save & Start Game!", ImVec2(-1.0f, 0))) {
+                    Globals::SaveManagerOpen = false;
                     Hooks::StartupCompletedHook();
                 }
             }
             else {
                 ImGui::Text("No saves found, create one!");
             }
+            ImGui::End();
+        }
+
+        if (Globals::SoloVSAIOpen) {
+            static const wchar_t* commandToExecute = nullptr;
+
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
+            ImGui::Begin("Solo VS AI", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            ImVec2 textSize = ImGui::CalcTextSize("Versus Private (Solo vs AI)");
+
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+
+            float centerX = (windowWidth - textSize.x) * 0.5f;
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
+
+            ImGui::Text("Versus Private (Solo vs AI)");
+
+            ImGui::SetWindowFontScale(1.0f);
+
+            if (ImGui::CollapsingHeader("Supercharge")) {
+                ImGui::Indent();
+                for (int i = 0; i < Constants::PvAIMaps::Supercharge.size(); i++) {
+                    if (ImGui::RadioButton(Constants::PvAIMaps::Supercharge[i].first.c_str(), commandToExecute == Constants::PvAIMaps::Supercharge[i].second)) {
+                        commandToExecute = Constants::PvAIMaps::Supercharge[i].second;
+                    }
+                }
+                ImGui::Unindent();
+            }
+
+            if (ImGui::CollapsingHeader("Incursion")) {
+                ImGui::Indent();
+                for (int i = 0; i < Constants::PvAIMaps::Incursion.size(); i++) {
+                    if (ImGui::RadioButton(Constants::PvAIMaps::Incursion[i].first.c_str(), commandToExecute == Constants::PvAIMaps::Incursion[i].second)) {
+                        commandToExecute = Constants::PvAIMaps::Incursion[i].second;
+                    }
+                }
+                ImGui::Unindent();
+            }
+
+            if (ImGui::CollapsingHeader("Capture")) {
+                ImGui::Indent();
+                for (int i = 0; i < Constants::PvAIMaps::Capture.size(); i++) {
+                    if (ImGui::RadioButton(Constants::PvAIMaps::Capture[i].first.c_str(), commandToExecute == Constants::PvAIMaps::Capture[i].second)) {
+                        commandToExecute = Constants::PvAIMaps::Capture[i].second;
+                    }
+                }
+                ImGui::Unindent();
+            }
+
+            if (ImGui::CollapsingHeader("Meltdown")) {
+                ImGui::Indent();
+                for (int i = 0; i < Constants::PvAIMaps::Meltdown.size(); i++) {
+                    if (ImGui::RadioButton(Constants::PvAIMaps::Meltdown[i].first.c_str(), commandToExecute == Constants::PvAIMaps::Meltdown[i].second)) {
+                        commandToExecute = Constants::PvAIMaps::Meltdown[i].second;
+                    }
+                }
+                ImGui::Unindent();
+            }
+
+            if (ImGui::CollapsingHeader("Face-Off")) {
+                ImGui::Indent();
+                for (int i = 0; i < Constants::PvAIMaps::FaceOff.size(); i++) {
+                    if (ImGui::RadioButton(Constants::PvAIMaps::FaceOff[i].first.c_str(), commandToExecute == Constants::PvAIMaps::FaceOff[i].second)) {
+                        commandToExecute = Constants::PvAIMaps::FaceOff[i].second;
+                    }
+                }
+                ImGui::Unindent();
+            }
+
+            if (commandToExecute != nullptr) {
+                if (ImGui::Button("Play!", ImVec2(-1.0f, 0))) {
+                    EngineLogic::ExecConsoleCommand(commandToExecute);
+                    commandToExecute = nullptr;
+                    Globals::SoloVSAIOpen = false;
+                }
+            }
+            if (ImGui::Button("Close", ImVec2(-1.0f, 0))) {
+                Globals::SoloVSAIOpen = false;
+            }
+
             ImGui::End();
         }
 
@@ -805,13 +961,21 @@ namespace Hooks{
 
     void StartupCompletedHook() {
         std::cout << "[GAME] Startup Complete!" << std::endl;
-        Globals::SaveManagerOpen = false;
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
+        if (!SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue) {
+            SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue = true;
+            SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedVersusPrologue = true;
+            SDKUtils::GetLastOfClass<UWillowProfile>()->bDirty = true;
+        }
         SDKUtils::GetLastOfClass<UPoplarPressStartGFxMovie>()->ContinueToMenu();
     }
 
     void MainPanelClickedHook(uint32_t PanelId) {
-        if (PanelId == 8) { // Dojo
+        std::cout << PanelId << std::endl;
+        if (PanelId == 4) { // Versus Private
+            Overlay::OpenSoloVSAI();
+        }
+        else if (PanelId == 8) { // Dojo
             EngineLogic::ExecConsoleCommand(L"open Dojo_P");
         }
     }
@@ -1005,7 +1169,7 @@ namespace Hooks{
 
         if (function == mainPanelClickedUFunction) {
             MainPanelClickedHook(reinterpret_cast<UPoplarFrontendScreenMainGFxObject_execHandleMainPanelButtonClicked_Params*>(params)->PanelId);
-            //return;
+            return;
         }
 
 
