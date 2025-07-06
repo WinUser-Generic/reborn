@@ -309,6 +309,12 @@ namespace Globals {
 
     bool SoloVSAIOpen = false;
 
+    bool amStandalone = false;
+
+    bool didStandaloneCharacterInitialization = false;
+
+    float timeTillMutationInit = 0.0f;
+
     std::vector<Metagame::SaveFile> saveFiles = std::vector<Metagame::SaveFile>();
 
     unsigned int CurrentSaveFile = 0;
@@ -835,13 +841,13 @@ namespace Metagame {
 
         SaveFile newSave = SaveFile(saveName, startWithEverything);
 
-        for (UPoplarPlayerClassIdentifierDefinition* classID : SDKUtils::GetAllOfClass<UPoplarPlayerClassIdentifierDefinition>()) {
+        for (UPoplarPlayerNameIdentifierDefinition* classID : SDKUtils::GetAllOfClass<UPoplarPlayerNameIdentifierDefinition>()) {
             if (!classID->GetFullName().contains("Default")) {
                 if (startWithEverything) {
-                    newSave.characters.push_back(Character(classID->GetFullName(), classID->ClassName.ToString(), 10, 1.0f));
+                    newSave.characters.push_back(Character(classID->GetFullName(), classID->CharacterClassId->ClassName.ToString(), 10, 1.0f));
                 }
                 else {
-                    newSave.characters.push_back(Character(classID->GetFullName(), classID->ClassName.ToString()));
+                    newSave.characters.push_back(Character(classID->GetFullName(), classID->CharacterClassId->ClassName.ToString()));
                 }
             }
         }
@@ -851,6 +857,26 @@ namespace Metagame {
         Sleep(500);
 
         Globals::saveFiles = Metagame::ReadAllSaves();
+    }
+
+    const std::string& GetCharacterObjectNameFromName(std::string& characterDisplayName) {
+        for (const auto& character : Globals::saveFiles[Globals::CurrentSaveFile].characters) {
+            if (character.characterDisplayName == characterDisplayName) {
+                return character.characterObjectName;
+            }
+        }
+
+        throw std::exception("Invalid Character passed to GetCharacterObjectNameFromName!");
+    }
+
+    const Character& GetCharacterFromName(std::string& characterDisplayName) {
+        for (const auto& character : Globals::saveFiles[Globals::CurrentSaveFile].characters) {
+            if (character.characterDisplayName == characterDisplayName) {
+                return character;
+            }
+        }
+
+        throw std::exception("Invalid Character passed to GetCharacterFromName!");
     }
 }
 
@@ -911,13 +937,17 @@ namespace Overlay {
 
             ImGui::SetWindowFontScale(1.0f);
 
+            float availWidth = ImGui::GetContentRegionAvail().x;
+            float spacing = ImGui::GetStyle().ItemSpacing.x;
+            float buttonWidth = (availWidth - spacing) * 0.5f;
+
             if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
-                if (ImGui::Button("Close")) {
+                if (ImGui::Button("Close", ImVec2(buttonWidth, 0))) {
                     Globals::LaunchSequenceState = Globals::ELaunchSequenceState::NotOpen;
                 }
             }
             else {
-                if (ImGui::Button("Back")) {
+                if (ImGui::Button("Back", ImVec2(buttonWidth, 0))) {
                     Globals::LaunchSequenceState = (Globals::ELaunchSequenceState)(Globals::LaunchSequenceState - 1);
                 }
             }
@@ -925,13 +955,13 @@ namespace Overlay {
             ImGui::SameLine();
 
             if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
-                if (ImGui::Button("Start!")) {
+                if (ImGui::Button("Start!", ImVec2(buttonWidth, 0))) {
                     Globals::LaunchSequenceState = Globals::ELaunchSequenceState::NotOpen;
                     EngineLogic::ExecConsoleCommand(Globals::LaunchCommand);
                 }
             }
             else {
-                if (ImGui::Button("Next")) {
+                if (ImGui::Button("Next", ImVec2(buttonWidth, 0))) {
                     Globals::LaunchSequenceState = (Globals::ELaunchSequenceState)(Globals::LaunchSequenceState + 1);
                 }
             }
@@ -956,6 +986,7 @@ namespace Overlay {
             if (Globals::saveFiles.size() > 0) {
                 if (ImGui::Button("Select Save & Start Game!", ImVec2(-1.0f, 0))) {
                     Globals::SaveManagerOpen = false;
+                    Globals::CurrentSaveFile = selectedSave;
                     Hooks::StartupCompletedHook();
                 }
             }
@@ -1036,16 +1067,26 @@ namespace Overlay {
                 ImGui::Unindent();
             }
 
+            float availWidth = ImGui::GetContentRegionAvail().x;
+            float spacing = ImGui::GetStyle().ItemSpacing.x;
+            float buttonWidth = (availWidth - spacing) * 0.5f;
+
+            if (ImGui::Button("Close", ImVec2(buttonWidth, 0))) {
+                Globals::SoloVSAIOpen = false;
+            }
+
             if (commandToExecute != nullptr) {
-                if (ImGui::Button("Play!", ImVec2(-1.0f, 0))) {
+                ImGui::SameLine();
+
+                if (ImGui::Button("Play!", ImVec2(buttonWidth, 0))) {
+                    Globals::amStandalone = true;
                     StartLaunchSequence(commandToExecute);
                     commandToExecute = nullptr;
                     Globals::SoloVSAIOpen = false;
                 }
             }
-            if (ImGui::Button("Close", ImVec2(-1.0f, 0))) {
-                Globals::SoloVSAIOpen = false;
-            }
+
+            
 
             ImGui::End();
         }
@@ -1155,46 +1196,68 @@ namespace Hooks{
     void GameEngineTickHook(UGameEngine* engine, float DeltaTime) {
         GameEngineTick.call<void>(engine, DeltaTime);
 
-        if (Globals::netDriver && Globals::timeTillStartupMassacre > 0.0f) {
-            bool tickTheDoomTimer = true;
+        if (Globals::amStandalone) {
+            if (Globals::timeTillMutationInit > 0.0f) {
+                Globals::timeTillMutationInit -= DeltaTime;
 
-            for (UNetConnection* Connection : Globals::connections) {
-                if (Connection && (APoplarPlayerController*)Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) {
-                    tickTheDoomTimer = false;
-                    break;
-                }
-            }
+                if (Globals::timeTillMutationInit <= 0.0f) {
+                    APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
 
-            if (tickTheDoomTimer) {
-                Globals::timeTillStartupMassacre -= DeltaTime;
-            }
+                    std::cout << "[GAME] Running Standalone Mutation Setup" << std::endl;
 
-            if (Globals::timeTillStartupMassacre <= 0.0f) {
-                Globals::hasStartupMassacreHappened = true;
-
-                std::cout << "[GAME] Committing startup massacre to sync everyone up!" << std::endl;
-                for (UNetConnection* Connection : Globals::connections) {
-                    if(Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn)
-                    ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
-
-                    if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
-                        ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
+                    for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                        if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef && Metagame::GetCharacterFromName(Globals::selectedCharacter).level >= mut->HelixLevel) {
+                            ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                        }
                     }
+
+                    // TODO: Gear here too...
                 }
             }
         }
 
-        if (Globals::netDriver) {
-            Globals::time += DeltaTime;
+        if (Globals::amServer) {
+            if (Globals::netDriver && Globals::timeTillStartupMassacre > 0.0f) {
+                bool tickTheDoomTimer = true;
 
-            static float time = 0.0;
+                for (UNetConnection* Connection : Globals::connections) {
+                    if (Connection && (APoplarPlayerController*)Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) {
+                        tickTheDoomTimer = false;
+                        break;
+                    }
+                }
 
-            time += DeltaTime;
+                if (tickTheDoomTimer) {
+                    Globals::timeTillStartupMassacre -= DeltaTime;
+                }
 
-            if (time > (1.0f / Settings::tickrate)) {
-                time = 0.0f;
+                if (Globals::timeTillStartupMassacre <= 0.0f) {
+                    Globals::hasStartupMassacreHappened = true;
 
-                ServerNetworking::TickNetServer(Globals::netDriver);
+                    std::cout << "[GAME] Committing startup massacre to sync everyone up!" << std::endl;
+                    for (UNetConnection* Connection : Globals::connections) {
+                        if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn)
+                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
+
+                        if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
+                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
+                        }
+                    }
+                }
+            }
+
+            if (Globals::netDriver) {
+                Globals::time += DeltaTime;
+
+                static float time = 0.0;
+
+                time += DeltaTime;
+
+                if (time > (1.0f / Settings::tickrate)) {
+                    time = 0.0f;
+
+                    ServerNetworking::TickNetServer(Globals::netDriver);
+                }
             }
         }
     }
@@ -1247,6 +1310,7 @@ namespace Hooks{
             Globals::ppcsWeSetupAugsFor.clear();
             Globals::hasStartupMassacreHappened = false;
             Globals::timeTillStartupMassacre = 0.0f;
+            Globals::didStandaloneCharacterInitialization = false;
         }
 
         static UFunction* updateHelixMenuStateUFunction = nullptr;
@@ -1308,64 +1372,93 @@ namespace Hooks{
             }
         }
 
+        static UFunction* characterPossesionStandaloneUFunction = nullptr;
+
+        if (!characterPossesionStandaloneUFunction)
+            characterPossesionStandaloneUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerController.SwitchToPendingPlayerClass");
+
+        if (function == characterPossesionStandaloneUFunction) {
+            if (Globals::amStandalone && !Globals::didStandaloneCharacterInitialization) { // Standalone Character Initialization
+                APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
+
+                if (ppc->MyPoplarPRI) {
+                    Globals::didStandaloneCharacterInitialization = true;
+
+                    std::cout << "[GAME] Running standalone character initialization!" << std::endl;
+
+                    UPoplarPlayerNameIdentifierDefinition* nameIdDef = UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>(Metagame::GetCharacterObjectNameFromName(Globals::selectedCharacter));
+
+                    ProcessEvent.call(object, function, params);
+
+                    ppc->eventSwitchPoplarPlayerClass(nameIdDef);
+
+                    Globals::timeTillMutationInit = 5.0f;
+
+                    return;
+                }
+            }
+        }
+
         static UFunction* characterPossessionUFunction = nullptr;
 
         if (!characterPossessionUFunction)
             characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
 
         if (function == characterPossessionUFunction) {
-            APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
-            if (ppc->MyPoplarPRI && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
-                // TODO: Client-auth Gear Status
-                if (Globals::amServer) {
-                    //Globals::DisableGC = true;
-                }
-
-                bool alreadySetup = false;
-                for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
-                    if (cmpPPC == ppc) {
-                        alreadySetup = true;
-                        break;
+            if (!Globals::amStandalone) { // In theory should never happen outside of networked play, but I've been wrong before...
+                APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
+                if (ppc->MyPoplarPRI && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
+                    // TODO: Client-auth Gear Status
+                    if (Globals::amServer) {
+                        //Globals::DisableGC = true;
                     }
-                }
 
-                if (!alreadySetup) { //
-                    std::cout << "Setting up mutations, gear, and helix for " << ppc->GetFullName() << std::endl;
-                    Globals::ppcsWeSetupAugsFor.push_back(ppc);
-
-                    ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
-
-                    // TODO: Client-auth Mutation Status
-                    for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                        if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
-                            ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                    bool alreadySetup = false;
+                    for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
+                        if (cmpPPC == ppc) {
+                            alreadySetup = true;
+                            break;
                         }
                     }
 
-                    for (int i = 0; i < 3; i++) {
-                        if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
-                            if (i == 0) {
-                                ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER"), Globals::GetGWorld());
-                            }
-                            if (i == 1) {
-                                ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG"), Globals::GetGWorld());
-                            }
-                            if (i == 2) {
-                                ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT"), Globals::GetGWorld());
-                            }
+                    if (!alreadySetup) { //
+                        std::cout << "Setting up mutations, gear, and helix for " << ppc->GetFullName() << std::endl;
+                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
 
-                            ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
-                            ppc->MyPoplarPRI->Perks[i].bActive = 1;
-                            ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
-                            ppc->MyPoplarPRI->Perks[i].Rarity = 5;//GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
-                            //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
+                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                        // TODO: Client-auth Mutation Status
+                        for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                            if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
+                                ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                            }
+                        }
+
+                        for (int i = 0; i < 3; i++) {
+                            if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
+                                if (i == 0) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER"), Globals::GetGWorld());
+                                }
+                                if (i == 1) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG"), Globals::GetGWorld());
+                                }
+                                if (i == 2) {
+                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT"), Globals::GetGWorld());
+                                }
+
+                                ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
+                                ppc->MyPoplarPRI->Perks[i].bActive = 1;
+                                ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
+                                ppc->MyPoplarPRI->Perks[i].Rarity = 5;//GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
+                                //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
+                            }
                         }
                     }
+
                 }
-            }
-            else {
-                std::cout << "[GAME] Failed to setup Augments!" << std::endl;
+                else {
+                    std::cout << "[GAME] Failed to setup Augments!" << std::endl;
+                }
             }
         }
 
@@ -1547,6 +1640,7 @@ namespace Hooks{
             std::cout << "[GAME] Running world switch behaviors!" << std::endl;
             Globals::AugStatus.clear();
             Globals::ppcsWeSetupAugsFor.clear();
+            Globals::didStandaloneCharacterInitialization = false;
         }
 
         bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
@@ -1692,7 +1786,6 @@ namespace Init {
             Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x16EC4D0), &Hooks::JustDoNothingHook);
             Hooks::JustDoNothing2 = safetyhook::create_inline((void*)(Globals::baseAddress + 0xE5F320), &Hooks::JustDoNothingHook);
             Hooks::PoplarGameInfoSetup = safetyhook::create_inline((void*)(Globals::baseAddress + 0x1474140), &Hooks::PoplarGameInfoSetupHook);
-            Hooks::GameEngineTick = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0207e10), &Hooks::GameEngineTickHook);
             Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
             Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
             Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
@@ -1702,6 +1795,7 @@ namespace Init {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
         }
 
+        Hooks::GameEngineTick = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0207e10), &Hooks::GameEngineTickHook);
         Hooks::ConsoleCommand = safetyhook::create_inline((void*)(Globals::baseAddress + 0x01fca00), &Hooks::ConsoleCommandHook);
         Hooks::ProcessEvent = safetyhook::create_inline((void*)(Globals::baseAddress + 0x109ca0), &Hooks::ProcessEventHook);
         Hooks::ProcessRemoteFunction = safetyhook::create_inline((void*)(Globals::baseAddress + 0x0728fd0), &Hooks::ProcessRemoteFunctionHook);
