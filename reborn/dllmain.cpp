@@ -1121,8 +1121,6 @@ namespace Overlay {
                 ImGui::Text(DisplayThree.c_str());
             }
 
-            ImGui::SetWindowFontScale(1.0f);
-
             float availWidth = ImGui::GetContentRegionAvail().x;
             float spacing = ImGui::GetStyle().ItemSpacing.x;
             float buttonWidth = (availWidth - spacing) * 0.5f;
@@ -1161,6 +1159,8 @@ namespace Overlay {
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
             ImGui::Begin("Reborn Save Manager", &Globals::SaveManagerOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+            ImGui::SetWindowFontScale(2.0f);
+
             if (ImGui::Button("+ New Save", ImVec2(-1.0f, 0))) {
                 Globals::NewSaveOpen = true;
             }
@@ -1200,8 +1200,6 @@ namespace Overlay {
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
 
             ImGui::Text("Versus Private (Solo vs AI)");
-
-            ImGui::SetWindowFontScale(1.0f);
 
             if (ImGui::CollapsingHeader("Supercharge")) {
                 ImGui::Indent();
@@ -1282,6 +1280,9 @@ namespace Overlay {
             static bool startWithEverything = false;
 
             ImGui::Begin("New Save", &Globals::NewSaveOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+
+            ImGui::SetWindowFontScale(2.0f);
+
             ImGui::InputText("Display Name (Visible in Multiplayer & Singleplayer)", &saveName);
             if (ImGui::RadioButton("Earn Gear, Mutations & Character Skins by Playing!", !startWithEverything)) {
                 startWithEverything = false;
@@ -1402,8 +1403,6 @@ namespace Hooks{
                         ppc->MyPoplarPRI->Perks[0].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotOne->itemObjectName), Globals::GetGWorld());
                         ppc->MyPoplarPRI->Perks[0].PerkFunction->ItemLevelOverride = Globals::GearSlotOne->level;
                         ppc->MyPoplarPRI->Perks[0].PerkFunction->bUseItemLevelOverride = true;
-                        ppc->MyPoplarPRI->Perks[0].MetaID = ppc->MyPoplarPRI->Perks[0].PerkFunction->MetaContentID;
-                        ppc->MyPoplarPRI->Perks[0].AssetKey = ppc->MyPoplarPRI->Perks[0].PerkFunction->AssetTrackerKey;
                         ppc->MyPoplarPRI->Perks[0].bActive = 1;
                         ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
                         ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotOne->itemObjectName);
@@ -1416,8 +1415,6 @@ namespace Hooks{
                         ppc->MyPoplarPRI->Perks[1].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotTwo->itemObjectName), Globals::GetGWorld());;
                         ppc->MyPoplarPRI->Perks[1].PerkFunction->ItemLevelOverride = Globals::GearSlotTwo->level;
                         ppc->MyPoplarPRI->Perks[1].PerkFunction->bUseItemLevelOverride = true;
-                        ppc->MyPoplarPRI->Perks[1].MetaID = ppc->MyPoplarPRI->Perks[1].PerkFunction->MetaContentID;
-                        ppc->MyPoplarPRI->Perks[1].AssetKey = ppc->MyPoplarPRI->Perks[1].PerkFunction->AssetTrackerKey;
                         ppc->MyPoplarPRI->Perks[1].bActive = 1;
                         ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
                         ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotTwo->itemObjectName);
@@ -1430,8 +1427,6 @@ namespace Hooks{
                         ppc->MyPoplarPRI->Perks[2].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotThree->itemObjectName), Globals::GetGWorld());
                         ppc->MyPoplarPRI->Perks[2].PerkFunction->ItemLevelOverride = Globals::GearSlotThree->level;
                         ppc->MyPoplarPRI->Perks[2].PerkFunction->bUseItemLevelOverride = true;
-                        ppc->MyPoplarPRI->Perks[2].MetaID = ppc->MyPoplarPRI->Perks[2].PerkFunction->MetaContentID;
-                        ppc->MyPoplarPRI->Perks[2].AssetKey = ppc->MyPoplarPRI->Perks[2].PerkFunction->AssetTrackerKey;
                         ppc->MyPoplarPRI->Perks[2].bActive = 1;
                         ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
                         ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotThree->itemObjectName);
