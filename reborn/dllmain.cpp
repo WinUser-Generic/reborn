@@ -207,6 +207,51 @@ namespace Constants {
             }
         };
     }
+
+    std::vector<std::pair<std::string, const wchar_t*>> CampaignMaps = {
+        {
+            "Prologue", L"open PvE_Prologue_P"
+        },
+        {
+            "The Algorithm", L"open Caverns_P"
+        },
+        {
+            "Void's Edge", L"open Portal_P"
+        },
+        {
+            "The Renegade", L"open Captains_P"
+        },
+        {
+            "Sentinel", L"open Ruins_P"
+        },
+        {
+            "The Experiment", L"open Observatory_p"
+        },
+        {
+            "The Saboteur", L"open Refinery_P"
+        },
+        {
+            "Heliophage", L"open Cathedral_P"
+        },
+    };
+
+    std::vector<std::pair<std::string, const wchar_t*>> OperationMaps = {
+        {
+            "Attikus and the Thrall Rebellion", L"open Slums_P"
+        },
+        {
+            "Toby's Friendship Raid", L"open Toby_Raid_P"
+        },
+        {
+            "Oscar Mike vs the Battleschool", L"open CullingFacility_P"
+        },
+        {
+            "Montana and the Demon Bear", L"open TallTales_P"
+        },
+        {
+            "Phoebe and the Heart of Ekkunar", L"open Heart_Ekkunar_P"
+        },
+    };
 }
 
 namespace Metagame {
@@ -360,6 +405,10 @@ namespace Globals {
     bool NewSaveOpen = false;
 
     bool SoloVSAIOpen = false;
+
+    bool CampaignOpen = false;
+
+    bool OperationsOpen = false;
 
     bool amStandalone = false;
 
@@ -963,6 +1012,14 @@ namespace Overlay {
         Globals::SoloVSAIOpen = true;
     }
 
+    void OpenCampaign() {
+        Globals::CampaignOpen = true;
+    }
+
+    void OpenOperations() {
+        Globals::OperationsOpen = true;
+    }
+
     void OpenSaveManager() {
         Globals::saveFiles = Metagame::ReadAllSaves();
         Globals::SaveManagerOpen = true;
@@ -1020,7 +1077,7 @@ namespace Overlay {
 
                 displayOne = GetItemDisplayName(Globals::GearSlotOne);
 
-                if (ImGui::BeginCombo("Gear Slot One", "Select Gear For Gear Slot One", ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                if (ImGui::BeginCombo("Gear Slot One", displayOne.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
                     if (ImGui::Selectable("No Item", Globals::GearSlotOne == nullptr)) {
                         Globals::GearSlotOne = nullptr;
                     }
@@ -1045,16 +1102,13 @@ namespace Overlay {
 
                 ImGui::PopID();
 
-                ImGui::SameLine();
-                ImGui::Text(displayOne.c_str());
-
                 ImGui::PushID("ItemSlotTwo");
 
                 static std::string DisplayTwo = "No Item";
 
                 DisplayTwo = GetItemDisplayName(Globals::GearSlotTwo);
 
-                if (ImGui::BeginCombo("Gear Slot Two", "Select Gear For Gear Slot Two", ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                if (ImGui::BeginCombo("Gear Slot Two", DisplayTwo.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
 
                     if (ImGui::Selectable("No Item", Globals::GearSlotTwo == nullptr)) {
                         Globals::GearSlotTwo = nullptr;
@@ -1080,19 +1134,13 @@ namespace Overlay {
 
                 ImGui::PopID();
 
-                ImGui::SameLine();
-                ImGui::Text(DisplayTwo.c_str());
-
                 ImGui::PushID("ItemSlotThree");
 
                 static std::string DisplayThree = "No Item";
 
                 DisplayThree = GetItemDisplayName(Globals::GearSlotThree);
 
-                if (ImGui::BeginCombo("Gear Slot Three", "Select Gear For Gear Slot Three", ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
-                    ImGui::SameLine();
-                    ImGui::Text(DisplayThree.c_str());
-                    
+                if (ImGui::BeginCombo("Gear Slot Three", DisplayThree.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
                     if (ImGui::Selectable("No Item", Globals::GearSlotThree == nullptr)) {
                         Globals::GearSlotThree = nullptr;
                     }
@@ -1116,9 +1164,6 @@ namespace Overlay {
                 }
 
                 ImGui::PopID();
-
-                ImGui::SameLine();
-                ImGui::Text(DisplayThree.c_str());
             }
 
             float availWidth = ImGui::GetContentRegionAvail().x;
@@ -1275,6 +1320,100 @@ namespace Overlay {
             ImGui::End();
         }
 
+        if (Globals::CampaignOpen) {
+            static const wchar_t* commandToExecute = nullptr;
+
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
+            ImGui::Begin("Campaign", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            ImVec2 textSize = ImGui::CalcTextSize("Campaign (Story Private)");
+
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+
+            float centerX = (windowWidth - textSize.x) * 0.5f;
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
+
+            ImGui::Text("Campaign (Story Private)");
+
+            for (int i = 0; i < Constants::CampaignMaps.size(); i++) {
+                if (ImGui::RadioButton(Constants::CampaignMaps[i].first.c_str(), commandToExecute == Constants::CampaignMaps[i].second)) {
+                    commandToExecute = Constants::CampaignMaps[i].second;
+                }
+            }
+
+            float availWidth = ImGui::GetContentRegionAvail().x;
+            float spacing = ImGui::GetStyle().ItemSpacing.x;
+            float buttonWidth = (availWidth - spacing) * 0.5f;
+
+            if (ImGui::Button("Close", ImVec2(buttonWidth, 0))) {
+                Globals::CampaignOpen = false;
+            }
+
+            if (commandToExecute != nullptr) {
+                ImGui::SameLine();
+
+                if (ImGui::Button("Play!", ImVec2(buttonWidth, 0))) {
+                    Globals::amStandalone = true;
+                    StartLaunchSequence(commandToExecute);
+                    commandToExecute = nullptr;
+                    Globals::CampaignOpen = false;
+                }
+            }
+
+            ImGui::End();
+        }
+
+        if (Globals::OperationsOpen) {
+            static const wchar_t* commandToExecute = nullptr;
+
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
+            ImGui::Begin("Operations", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            ImVec2 textSize = ImGui::CalcTextSize("Operations (Operations Private)");
+
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+
+            float centerX = (windowWidth - textSize.x) * 0.5f;
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
+
+            ImGui::Text("Operations (Operations Private)");
+
+            for (int i = 0; i < Constants::OperationMaps.size(); i++) {
+                if (ImGui::RadioButton(Constants::OperationMaps[i].first.c_str(), commandToExecute == Constants::OperationMaps[i].second)) {
+                    commandToExecute = Constants::OperationMaps[i].second;
+                }
+            }
+
+            float availWidth = ImGui::GetContentRegionAvail().x;
+            float spacing = ImGui::GetStyle().ItemSpacing.x;
+            float buttonWidth = (availWidth - spacing) * 0.5f;
+
+            if (ImGui::Button("Close", ImVec2(buttonWidth, 0))) {
+                Globals::OperationsOpen = false;
+            }
+
+            if (commandToExecute != nullptr) {
+                ImGui::SameLine();
+
+                if (ImGui::Button("Play!", ImVec2(buttonWidth, 0))) {
+                    Globals::amStandalone = true;
+                    StartLaunchSequence(commandToExecute);
+                    commandToExecute = nullptr;
+                    Globals::OperationsOpen = false;
+                }
+            }
+
+            ImGui::End();
+        }
+
         if (Globals::NewSaveOpen) {
             static std::string saveName = "";
             static bool startWithEverything = false;
@@ -1298,6 +1437,10 @@ namespace Overlay {
             ImGui::End();
         }
     }
+}
+
+namespace Overlay {
+    void StartLaunchSequence(const wchar_t* command); // what the fuck is a header file
 }
 
 namespace Hooks{
@@ -1512,8 +1655,16 @@ namespace Hooks{
         if (PanelId == 4) { // Versus Private
             Overlay::OpenSoloVSAI();
         }
+        if (PanelId == 5) { // Story Private
+            Overlay::OpenCampaign();
+        }
+        if (PanelId == 7) { // Operations Private
+            Overlay::OpenOperations();
+        }
         else if (PanelId == 8) { // Dojo
-            EngineLogic::ExecConsoleCommand(L"open Dojo_P");
+            Globals::amStandalone = true;
+            Overlay::StartLaunchSequence(L"open Dojo_P");
+            //EngineLogic::ExecConsoleCommand(L"open Dojo_P");
         }
     }
 
@@ -1736,7 +1887,9 @@ namespace Hooks{
 
         if (function == mainPanelClickedUFunction) {
             MainPanelClickedHook(reinterpret_cast<UPoplarFrontendScreenMainGFxObject_execHandleMainPanelButtonClicked_Params*>(params)->PanelId);
-            return;
+            if (reinterpret_cast<UPoplarFrontendScreenMainGFxObject_execHandleMainPanelButtonClicked_Params*>(params)->PanelId != 11) {
+                return;
+            }
         }
 
 
