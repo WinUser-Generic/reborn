@@ -368,7 +368,7 @@ namespace Settings {
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Toby_Raid_P"; //
+    const wchar_t* MapString = L"open Inc_Stronghold2_P"; //
 }
 
 namespace Globals {
@@ -391,6 +391,10 @@ namespace Globals {
     bool hasStartupMassacreHappened = false;
 
     float timeTillStartupMassacre = 0.0f;
+
+    float timeTillHumanStart = 0.0f;
+
+    bool haveHumansStarted = false;
 
     std::vector<int> AugStatus = std::vector<int>();
 
@@ -419,6 +423,8 @@ namespace Globals {
     std::vector<Metagame::SaveFile> saveFiles = std::vector<Metagame::SaveFile>();
 
     unsigned int CurrentSaveFile = 0;
+
+    bool didSendPreferencesToServer = false;
 
     std::string selectedCharacter = "ModernSoldier";
 
@@ -685,7 +691,7 @@ namespace ServerNetworking {
             if (!connection)
                 continue;
 
-            if (GetConnectionState(connection) != 3) {
+            if (GetConnectionState(connection) < 3) {
                 if (connection->Actor) {
                     Globals::connections.erase(std::remove_if(Globals::connections.begin(), Globals::connections.end(), [&connection](UNetConnection* cmp) {
                         if(cmp == connection)
@@ -1481,39 +1487,7 @@ namespace Hooks{
             Globals::sentTemporaries.push_back(std::make_pair(connection, new std::vector<AActor*>()));
 
             if (numPlayersJoined == Settings::NumPlayersToStart) {
-                SDKUtils::GetLastOfClass<APoplarGameInfo>()->StartHumans();
-
-                for (UNetConnection* connection2 : Globals::connections) {
-
-                    UWorld* theWorld = Globals::GetGWorld();
-                    FURL theURL = FURL();
-
-                    FUniqueNetId netID = FUniqueNetId();
-
-                    netID.bHasValue = true;
-
-                    static uint8_t id = 0x0;
-
-                    id++;
-
-                    netID.RawId[0] = id;
-
-                    FString err = FString();
-
-                    APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(FString(), FString(), netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
-
-                    connection2->Actor = pc;
-
-                    pc->Player = connection2;
-
-                    pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
-
-                    SDKUtils::GetLastOfClass<AGameInfo>()->eventPostLogin(pc);
-
-                    //pc->ClientGotoState(FName(), FName());
-                }
-
-                Globals::timeTillStartupMassacre = 5.0f;
+                Globals::timeTillHumanStart = 5.0f;
             }
         }
         else if (message == 0xf) {
@@ -1590,7 +1564,7 @@ namespace Hooks{
                 bool tickTheDoomTimer = true;
 
                 for (UNetConnection* Connection : Globals::connections) {
-                    if (Connection && (APoplarPlayerController*)Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) {
+                    if (Connection && (APoplarPlayerController*)Connection->Actor && (((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView || !((APoplarPlayerController*)Connection->Actor)->TestPerk.bActive)) {
                         tickTheDoomTimer = false;
                         break;
                     }
@@ -1612,6 +1586,46 @@ namespace Hooks{
                             ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
                         }
                     }
+                }
+            }
+
+            if (Globals::timeTillHumanStart > 0.0f) {
+                Globals::timeTillHumanStart -= DeltaTime;
+
+                if (Globals::timeTillHumanStart <= 0.0f) {
+                    Globals::haveHumansStarted = true;
+
+                    SDKUtils::GetLastOfClass<APoplarGameInfo>()->StartHumans();
+
+                    for (UNetConnection* connection2 : Globals::connections) {
+
+                        UWorld* theWorld = Globals::GetGWorld();
+                        FURL theURL = FURL();
+
+                        FUniqueNetId netID = FUniqueNetId();
+
+                        netID.bHasValue = true;
+
+                        static uint8_t id = 0x0;
+
+                        id++;
+
+                        netID.RawId[0] = id;
+
+                        FString err = FString();
+
+                        APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(FString(), FString(), netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
+
+                        connection2->Actor = pc;
+
+                        pc->Player = connection2;
+
+                        pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
+
+                        SDKUtils::GetLastOfClass<AGameInfo>()->eventPostLogin(pc);
+                    }
+
+                    Globals::timeTillStartupMassacre = 5.0f;
                 }
             }
 
@@ -1652,6 +1666,9 @@ namespace Hooks{
 
     void MainPanelClickedHook(uint32_t PanelId) {
         std::cout << PanelId << std::endl;
+        if (PanelId == 1) { // Versus Private
+            Overlay::StartLaunchSequence(L"open ");
+        }
         if (PanelId == 4) { // Versus Private
             Overlay::OpenSoloVSAI();
         }
@@ -1688,6 +1705,7 @@ namespace Hooks{
             Globals::hasStartupMassacreHappened = false;
             Globals::timeTillStartupMassacre = 0.0f;
             Globals::didStandaloneCharacterInitialization = false;
+            Globals::didSendPreferencesToServer = false;
         }
 
         static UFunction* updateHelixMenuStateUFunction = nullptr;
@@ -1784,54 +1802,120 @@ namespace Hooks{
         if (function == characterPossessionUFunction) {
             if (!Globals::amStandalone) { // In theory should never happen outside of networked play, but I've been wrong before...
                 APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
-                if (ppc->MyPoplarPRI && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
-                    // TODO: Client-auth Gear Status
-                    if (Globals::amServer) {
-                        //Globals::DisableGC = true;
-                    }
-
-                    bool alreadySetup = false;
-                    for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
-                        if (cmpPPC == ppc) {
-                            alreadySetup = true;
-                            break;
-                        }
-                    }
-
-                    if (!alreadySetup) { //
-                        std::cout << "Setting up mutations, gear, and helix for " << ppc->GetFullName() << std::endl;
-                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
-
-                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
-                        // TODO: Client-auth Mutation Status
-                        for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                            if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef) {
-                                ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                if (ppc->MyPoplarPRI) {
+                    if (Globals::amServer && ppc->TestPerk.bActive && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
+                        bool alreadySetup = false;
+                        for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
+                            if (cmpPPC == ppc) {
+                                alreadySetup = true;
+                                break;
                             }
                         }
 
-                        for (int i = 0; i < 3; i++) {
-                            if (!ppc->MyPoplarPRI->Perks[i].PerkFunction) {
-                                if (i == 0) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ShardGain_Legendary_LLC_FOUNDER"), Globals::GetGWorld());
-                                }
-                                if (i == 1) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_ReloadSpeed_Legendary_ROG"), Globals::GetGWorld());
-                                }
-                                if (i == 2) {
-                                    ppc->MyPoplarPRI->Perks[i].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear.Gear.Legendary.PF_Gear_CritDamage_Legendary_JNT"), Globals::GetGWorld());
-                                }
+                        if (!alreadySetup) { //
+                            std::cout << "[GAME] Setting up mutations and helix for " << ppc->GetFullName() << std::endl;
+                            Globals::ppcsWeSetupAugsFor.push_back(ppc);
 
-                                ppc->MyPoplarPRI->Perks[i].ItemLevel = INT_MAX;
-                                ppc->MyPoplarPRI->Perks[i].bActive = 1;
-                                ppc->MyPoplarPRI->Perks[i].bCanUse = 1;
-                                ppc->MyPoplarPRI->Perks[i].Rarity = 5;//GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[i].PerkFunction->GetFullName());
-                                //ppc->MyPoplarPRI->OnRep_Perks(i, FReplicatedPerkItem());
+                            ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                            for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                                if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef && mut->HelixLevel > ppc->TestPerk.ItemLevel) {
+                                    ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                                }
                             }
                         }
                     }
+                    else if(!Globals::amServer) {
+                        if (!Globals::didSendPreferencesToServer) { // We haven't set our prefs yet, send them to the server now
+                            Globals::didSendPreferencesToServer = true;
 
+                            std::cout << "[GAME] Sending Player Preferences to Server" << std::endl;
+
+                            nlohmann::json jsonObj = nlohmann::json();
+
+                            jsonObj["NEMA"] = true;
+                            jsonObj["playerClassNameIdentifier"] = Metagame::GetCharacterObjectNameFromName(Globals::selectedCharacter);
+                            jsonObj["playerLevel"] = Metagame::GetCharacterFromName(Globals::selectedCharacter).level;
+                            jsonObj["playerName"] = Globals::saveFiles[Globals::CurrentSaveFile].name;
+                            if(Globals::GearSlotOne)
+                                jsonObj["perkOne"] = Globals::GearSlotOne->itemObjectName;
+
+                            if (Globals::GearSlotTwo)
+                                jsonObj["perkTwo"] = Globals::GearSlotTwo->itemObjectName;
+
+                            if (Globals::GearSlotThree)
+                                jsonObj["perkThree"] = Globals::GearSlotThree->itemObjectName;
+
+                            std::string jsonObjStr = jsonObj.dump();
+
+                            std::wstring wJsonObjStr(jsonObjStr.begin(), jsonObjStr.end());
+
+                            ppc->eventServerProcessConvolve(wJsonObjStr.c_str(), 0);
+                        }
+                        else if(ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) { // We assume next possession after sending prefs will be our character of choice
+
+                            bool alreadySetup = false;
+                            for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
+                                if (cmpPPC == ppc) {
+                                    alreadySetup = true;
+                                    break;
+                                }
+                            }
+
+                            if (!alreadySetup) {
+                                std::cout << "[GAME] Running Local Mutation Setup" << std::endl;
+
+                                ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                                for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
+                                    if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef && Metagame::GetCharacterFromName(Globals::selectedCharacter).level >= mut->HelixLevel) {
+                                        ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                                    }
+                                }
+
+                                if (Globals::GearSlotOne) {
+
+                                    ppc->MyPoplarPRI->Perks[0].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotOne->itemObjectName), Globals::GetGWorld());
+                                    ppc->MyPoplarPRI->Perks[0].PerkFunction->ItemLevelOverride = Globals::GearSlotOne->level;
+                                    ppc->MyPoplarPRI->Perks[0].PerkFunction->bUseItemLevelOverride = true;
+                                    ppc->MyPoplarPRI->Perks[0].bActive = 1;
+                                    ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
+                                    ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotOne->itemObjectName);
+                                    ppc->MyPoplarPRI->Perks[0].ItemLevel = Globals::GearSlotOne->level;
+
+                                    Globals::GearSlotOne = nullptr;
+                                }
+
+                                if (Globals::GearSlotTwo) {
+                                    ppc->MyPoplarPRI->Perks[1].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotTwo->itemObjectName), Globals::GetGWorld());;
+                                    ppc->MyPoplarPRI->Perks[1].PerkFunction->ItemLevelOverride = Globals::GearSlotTwo->level;
+                                    ppc->MyPoplarPRI->Perks[1].PerkFunction->bUseItemLevelOverride = true;
+                                    ppc->MyPoplarPRI->Perks[1].bActive = 1;
+                                    ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
+                                    ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotTwo->itemObjectName);
+                                    ppc->MyPoplarPRI->Perks[1].ItemLevel = Globals::GearSlotTwo->level;
+
+                                    Globals::GearSlotTwo = nullptr;
+                                }
+
+                                if (Globals::GearSlotThree) {
+                                    ppc->MyPoplarPRI->Perks[2].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotThree->itemObjectName), Globals::GetGWorld());
+                                    ppc->MyPoplarPRI->Perks[2].PerkFunction->ItemLevelOverride = Globals::GearSlotThree->level;
+                                    ppc->MyPoplarPRI->Perks[2].PerkFunction->bUseItemLevelOverride = true;
+                                    ppc->MyPoplarPRI->Perks[2].bActive = 1;
+                                    ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
+                                    ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotThree->itemObjectName);
+                                    ppc->MyPoplarPRI->Perks[2].ItemLevel = Globals::GearSlotThree->level;
+
+                                    Globals::GearSlotThree = nullptr;
+                                }
+
+                                ppc->MyPoplarPRI->OnRep_Perks(0, ppc->MyPoplarPRI->Perks[0]);
+                                ppc->MyPoplarPRI->OnRep_Perks(1, ppc->MyPoplarPRI->Perks[1]);
+                                ppc->MyPoplarPRI->OnRep_Perks(2, ppc->MyPoplarPRI->Perks[2]);
+                            }
+                        }
+                    }
                 }
                 else {
                     std::cout << "[GAME] Failed to setup Augments!" << std::endl;
@@ -1845,25 +1929,73 @@ namespace Hooks{
             serverConvolveUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerProcessConvolve");
 
         if (Globals::netDriver && function == serverConvolveUFunction) {
-            printf("[NETWORKING] Switching player class...\n");
+            printf("[NETWORKING] Setting up a player!\n");
 
             APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
             APlayerController_eventServerProcessConvolve_Params* parms = reinterpret_cast<APlayerController_eventServerProcessConvolve_Params*>(params);
 
-            std::wstring wCharacterString(parms->C.c_str());
+            std::wstring wJoinParams(parms->C.c_str());
 
-            std::string characterString(wCharacterString.begin(), wCharacterString.end());
+            std::string joinParams(wJoinParams.begin(), wJoinParams.end());
 
-            UPoplarPlayerNameIdentifierDefinition* playerClass = UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>(characterString);
+            nlohmann::json jsonObj = nlohmann::json::parse(joinParams);
 
-            if (playerClass) {
+            if (jsonObj["NEMA"] == true) { // Now you're in all of our matches :)
+                UPoplarPlayerNameIdentifierDefinition* playerClass = UObject::FindObject< UPoplarPlayerNameIdentifierDefinition>(jsonObj["playerClassNameIdentifier"]);
+
+                int playerLevel = jsonObj["playerLevel"];
+
+                UPoplarPerkFunction* perkOne = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkOne"]);
+                UPoplarPerkFunction* perkTwo = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkTwo"]);
+                UPoplarPerkFunction* perkThree = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkThree"]);
+
+                std::string playerName = jsonObj["playerName"];
+
+                std::wstring wName(playerName.begin(), playerName.end());
+
+                if (playerClass) {
+                    ppc->eventServerSelectCharacter(playerClass, nullptr, nullptr, true);
+
+                    ppc->eventSwitchPoplarPlayerClass(playerClass);
+
+                    ppc->ServerRestartPlayer();
+
+                    if (perkOne) {
+                        ppc->MyPoplarPRI->Perks[0].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(perkOne, Globals::GetGWorld());
+                        ppc->MyPoplarPRI->Perks[0].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkOne"]);
+                    }
+
+                    if (perkTwo) {
+                        ppc->MyPoplarPRI->Perks[1].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(perkTwo, Globals::GetGWorld());
+                        ppc->MyPoplarPRI->Perks[1].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkTwo"]);
+                    }
+
+                    if (perkThree) {
+                        ppc->MyPoplarPRI->Perks[2].PerkFunction = (UPoplarPerkFunction*)EngineLogic::ScuffedDuplicateObject(perkThree, Globals::GetGWorld());
+                        ppc->MyPoplarPRI->Perks[2].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkThree"]);
+                    }
+
+                    ppc->TestPerk.bActive = true;
+                    ppc->TestPerk.ItemLevel = playerLevel;
+
+                    ppc->ServerSetPlayerName(wName.c_str());
+                    ppc->MyPoplarPRI->PlayerName = FString(wName.c_str());
+                    ppc->MyPoplarPRI->PlayerNameHTML = FString(wName.c_str());
+                    ppc->MyPoplarPRI->PlayerNameTruncated = FString(wName.c_str());
+                    ppc->MyPoplarPRI->PlayerNameTruncatedHTML = FString(wName.c_str());
+                }
+
                 //ppc->eventServerSelectCharacter(playerClass, nullptr, nullptr, true);
 
                 //ppc->eventSwitchPoplarPlayerClass(playerClass);
                 //ppc->ServerRestartPlayer();
             }
-            
-            ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
 
             return;
         }
@@ -2020,6 +2152,7 @@ namespace Hooks{
             Globals::AugStatus.clear();
             Globals::ppcsWeSetupAugsFor.clear();
             Globals::didStandaloneCharacterInitialization = false;
+            Globals::didSendPreferencesToServer = false;
         }
 
         bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
