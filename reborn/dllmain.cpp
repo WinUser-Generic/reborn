@@ -1151,6 +1151,11 @@ namespace Overlay {
                 displayOne = GetItemDisplayName(Globals::GearSlotOne);
 
                 if (ImGui::BeginCombo("Gear Slot One", displayOne.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                    
+                    static std::string displayOneFilter = "";
+
+                    ImGui::InputText("Filter Gear", &displayOneFilter);
+                    
                     if (ImGui::Selectable("No Item", Globals::GearSlotOne == nullptr)) {
                         Globals::GearSlotOne = nullptr;
                     }
@@ -1158,15 +1163,17 @@ namespace Overlay {
                     for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
                         Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
 
-                        if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotOne == &item)) {
-                            Globals::GearSlotOne = &item;
-                        }
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::BeginTooltip();
-                            ImGui::Text(item.itemDisplayName.c_str());
-                            ImGui::Separator();
-                            ImGui::Text(item.itemFlavor.c_str());
-                            ImGui::EndTooltip();
+                        if (displayOneFilter.empty() || item.itemDisplayName.contains(displayOneFilter)) {
+                            if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotOne == &item)) {
+                                Globals::GearSlotOne = &item;
+                            }
+                            if (ImGui::IsItemHovered()) {
+                                ImGui::BeginTooltip();
+                                ImGui::Text(item.itemDisplayName.c_str());
+                                ImGui::Separator();
+                                ImGui::Text(item.itemFlavor.c_str());
+                                ImGui::EndTooltip();
+                            }
                         }
                     }
 
@@ -1183,6 +1190,10 @@ namespace Overlay {
 
                 if (ImGui::BeginCombo("Gear Slot Two", DisplayTwo.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
 
+                    static std::string displayTwoFilter = "";
+
+                    ImGui::InputText("Filter Gear", &displayTwoFilter);
+
                     if (ImGui::Selectable("No Item", Globals::GearSlotTwo == nullptr)) {
                         Globals::GearSlotTwo = nullptr;
                     }
@@ -1190,15 +1201,17 @@ namespace Overlay {
                     for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
                         Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
 
-                        if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotTwo == &item)) {
-                            Globals::GearSlotTwo = &item;
-                        }
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::BeginTooltip();
-                            ImGui::Text(item.itemDisplayName.c_str());
-                            ImGui::Separator();
-                            ImGui::Text(item.itemFlavor.c_str());
-                            ImGui::EndTooltip();
+                        if (displayTwoFilter.empty() || item.itemDisplayName.contains(displayTwoFilter)) {
+                            if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotTwo == &item)) {
+                                Globals::GearSlotTwo = &item;
+                            }
+                            if (ImGui::IsItemHovered()) {
+                                ImGui::BeginTooltip();
+                                ImGui::Text(item.itemDisplayName.c_str());
+                                ImGui::Separator();
+                                ImGui::Text(item.itemFlavor.c_str());
+                                ImGui::EndTooltip();
+                            }
                         }
                     }
 
@@ -1214,22 +1227,29 @@ namespace Overlay {
                 DisplayThree = GetItemDisplayName(Globals::GearSlotThree);
 
                 if (ImGui::BeginCombo("Gear Slot Three", DisplayThree.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                    static std::string displayThreeFilter = "";
+
+                    ImGui::InputText("Filter Gear", &displayThreeFilter);
+                    
                     if (ImGui::Selectable("No Item", Globals::GearSlotThree == nullptr)) {
                         Globals::GearSlotThree = nullptr;
                     }
 
+                    
                     for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
                         Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
 
-                        if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotThree == &item)) {
-                            Globals::GearSlotThree = &item;
-                        }
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::BeginTooltip();
-                            ImGui::Text(item.itemDisplayName.c_str());
-                            ImGui::Separator();
-                            ImGui::Text(item.itemFlavor.c_str());
-                            ImGui::EndTooltip();
+                            if (displayThreeFilter.empty() || item.itemDisplayName.contains(displayThreeFilter)) {
+                            if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotThree == &item)) {
+                                Globals::GearSlotThree = &item;
+                            }
+                            if (ImGui::IsItemHovered()) {
+                                ImGui::BeginTooltip();
+                                ImGui::Text(item.itemDisplayName.c_str());
+                                ImGui::Separator();
+                                ImGui::Text(item.itemFlavor.c_str());
+                                ImGui::EndTooltip();
+                            }
                         }
                     }
 
