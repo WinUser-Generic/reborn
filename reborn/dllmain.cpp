@@ -845,6 +845,8 @@ namespace ClientNetworking {
 
 namespace Hooks {
     void StartupCompletedHook();
+
+    bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3);
 }
 
 namespace Metagame {
@@ -1089,13 +1091,13 @@ namespace Overlay {
 
             if (!ipToConnectTo.empty()) {
                 if (ImGui::Button("Start!", ImVec2(buttonWidth, 0))) {
-                    Globals::DirectConnectOpen = false;
-
                     std::wstring wIp(ipToConnectTo.begin(), ipToConnectTo.end());
                     
                     std::wstring wcmd = L"open ";
 
-                    StartLaunchSequence((wcmd.append(wIp)).c_str());
+                    StartLaunchSequence(wcsdup((wcmd.append(wIp).c_str())));
+
+                    Globals::DirectConnectOpen = false;
                 }
             }
 
@@ -1740,7 +1742,6 @@ namespace Hooks{
     void MainPanelClickedHook(uint32_t PanelId) {
         std::cout << PanelId << std::endl;
         if (PanelId == 1) { // Versus Public
-            EngineLogic::ExecConsoleCommand(L"open 127.0.0.1");
             Overlay::OpenDirectConnect();
         }
         if (PanelId == 4) { // Versus Private
@@ -2215,6 +2216,20 @@ namespace Hooks{
     SafetyHookInline ConsoleCommand;
 
     bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3) {
+        static __int64 cachedA3 = 0x0;
+        static __int64 cachedA1 = 0x0;
+
+        if (a1 && a3 && !cachedA3) {
+            std::cout << "[ENGINE] Console commands enabled!" << std::endl;
+            cachedA3 = a3;
+            cachedA1 = a1;
+        }
+
+        if (!a3) {
+            a1 = cachedA1;
+            a3 = cachedA3;
+        }
+
         if (Globals::amServer && !Globals::hasDoneInitialTravel) {
             Globals::hasDoneInitialTravel = true;
             a2 = Settings::MapString;
