@@ -364,11 +364,11 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 4;
+    unsigned int NumPlayersToStart = 5;
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Inc_Stronghold2_P"; //
+    const wchar_t* MapString = L"open Wishbone_P"; //
 }
 
 namespace Globals {
@@ -444,6 +444,17 @@ namespace Globals {
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
+    }
+
+    void OnWorldSwitch() {
+        std::cout << "[GAME] Running world switch behaviors!" << std::endl;
+
+        Globals::AugStatus.clear();
+        Globals::ppcsWeSetupAugsFor.clear();
+        Globals::hasStartupMassacreHappened = false;
+        Globals::timeTillStartupMassacre = 0.0f;
+        Globals::didStandaloneCharacterInitialization = false;
+        Globals::didSendPreferencesToServer = false;
     }
 }
 
@@ -1564,7 +1575,7 @@ namespace Hooks{
                 bool tickTheDoomTimer = true;
 
                 for (UNetConnection* Connection : Globals::connections) {
-                    if (Connection && (APoplarPlayerController*)Connection->Actor && (((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView || !((APoplarPlayerController*)Connection->Actor)->TestPerk.bActive)) {
+                    if (Connection && (APoplarPlayerController*)Connection->Actor && (((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView)) {
                         tickTheDoomTimer = false;
                         break;
                     }
@@ -1602,19 +1613,29 @@ namespace Hooks{
                         UWorld* theWorld = Globals::GetGWorld();
                         FURL theURL = FURL();
 
-                        FUniqueNetId netID = FUniqueNetId();
+                        FUniqueNetId* netID = (FUniqueNetId*)EngineLogic::EngineMalloc(sizeof(FUniqueNetId));
 
-                        netID.bHasValue = true;
+                        *netID = FUniqueNetId();
+
+                        netID->bHasValue = true;
 
                         static uint8_t id = 0x0;
 
                         id++;
 
-                        netID.RawId[0] = id;
+                        netID->RawId[0] = id;
 
                         FString err = FString();
 
-                        APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(FString(), FString(), netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
+                        FString* portalString = (FString*)EngineLogic::EngineMalloc(sizeof(FString));
+
+                        *portalString = FString();
+
+                        FString* optionsString = (FString*)EngineLogic::EngineMalloc(sizeof(FString));
+
+                        *optionsString = FString();
+
+                        APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(*portalString, *optionsString, *netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
 
                         connection2->Actor = pc;
 
@@ -1667,7 +1688,7 @@ namespace Hooks{
     void MainPanelClickedHook(uint32_t PanelId) {
         std::cout << PanelId << std::endl;
         if (PanelId == 1) { // Versus Private
-            Overlay::StartLaunchSequence(L"open ");
+            Overlay::StartLaunchSequence(L"open 127.0.0.1");
         }
         if (PanelId == 4) { // Versus Private
             Overlay::OpenSoloVSAI();
@@ -1698,14 +1719,7 @@ namespace Hooks{
             clientTravelUFunction = UFunction::FindFunction("Function Engine.PlayerController.ClientTravel");
 
         if (function == clientTravelUFunction) {
-            std::cout << "[GAME] Running world switch behaviors!" << std::endl;
-
-            Globals::AugStatus.clear();
-            Globals::ppcsWeSetupAugsFor.clear();
-            Globals::hasStartupMassacreHappened = false;
-            Globals::timeTillStartupMassacre = 0.0f;
-            Globals::didStandaloneCharacterInitialization = false;
-            Globals::didSendPreferencesToServer = false;
+            Globals::OnWorldSwitch();
         }
 
         static UFunction* updateHelixMenuStateUFunction = nullptr;
@@ -1945,9 +1959,18 @@ namespace Hooks{
 
                 int playerLevel = jsonObj["playerLevel"];
 
-                UPoplarPerkFunction* perkOne = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkOne"]);
-                UPoplarPerkFunction* perkTwo = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkTwo"]);
-                UPoplarPerkFunction* perkThree = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkThree"]);
+                UPoplarPerkFunction* perkOne = nullptr;
+                UPoplarPerkFunction* perkTwo = nullptr;
+                UPoplarPerkFunction* perkThree = nullptr;
+
+                if(jsonObj["perkOne"])
+                    perkOne = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkOne"]);
+
+                if(jsonObj["perkTwo"])
+                    perkTwo = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkTwo"]);
+
+                if(jsonObj["perkThree"])
+                    perkThree = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkThree"]);
 
                 std::string playerName = jsonObj["playerName"];
 
@@ -1984,11 +2007,13 @@ namespace Hooks{
                     ppc->TestPerk.bActive = true;
                     ppc->TestPerk.ItemLevel = playerLevel;
 
+                    /*
                     ppc->ServerSetPlayerName(wName.c_str());
                     ppc->MyPoplarPRI->PlayerName = FString(wName.c_str());
                     ppc->MyPoplarPRI->PlayerNameHTML = FString(wName.c_str());
                     ppc->MyPoplarPRI->PlayerNameTruncated = FString(wName.c_str());
                     ppc->MyPoplarPRI->PlayerNameTruncatedHTML = FString(wName.c_str());
+                    */
                 }
 
                 //ppc->eventServerSelectCharacter(playerClass, nullptr, nullptr, true);
@@ -2148,11 +2173,7 @@ namespace Hooks{
         }
 
         if (std::wstring(a2).contains(L"open") || std::wstring(a2).contains(L"disconnect")) {
-            std::cout << "[GAME] Running world switch behaviors!" << std::endl;
-            Globals::AugStatus.clear();
-            Globals::ppcsWeSetupAugsFor.clear();
-            Globals::didStandaloneCharacterInitialization = false;
-            Globals::didSendPreferencesToServer = false;
+            Globals::OnWorldSwitch();
         }
 
         bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
