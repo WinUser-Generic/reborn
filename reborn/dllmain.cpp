@@ -368,7 +368,7 @@ namespace Settings {
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Wishbone_P"; //
+    const wchar_t* MapString = L"open Caverns_P"; //
 }
 
 namespace Globals {
@@ -1575,8 +1575,8 @@ namespace Hooks{
                     std::cout << "[GAME] Running Standalone Mutation Setup" << std::endl;
 
                     for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                        if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef && Metagame::GetCharacterFromName(Globals::selectedCharacter).level >= mut->HelixLevel) {
-                            ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                        if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef && Metagame::GetCharacterFromName(Globals::selectedCharacter).level >= mut->HelixLevel) {
+                            ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
                         }
                     }
 
@@ -1887,8 +1887,8 @@ namespace Hooks{
                             ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
 
                             for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                                if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef && mut->HelixLevel > ppc->TestPerk.ItemLevel) {
-                                    ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                                if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef && mut->HelixLevel > ppc->TestPerk.ItemLevel) {
+                                    ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
                                 }
                             }
                         }
@@ -1936,8 +1936,8 @@ namespace Hooks{
                                 ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
 
                                 for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                                    if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef && Metagame::GetCharacterFromName(Globals::selectedCharacter).level >= mut->HelixLevel) {
-                                        ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
+                                    if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef && Metagame::GetCharacterFromName(Globals::selectedCharacter).level >= mut->HelixLevel) {
+                                        ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef = (UPoplarAugDefinition*)EngineLogic::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
                                     }
                                 }
 
