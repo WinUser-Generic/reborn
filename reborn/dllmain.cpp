@@ -222,6 +222,9 @@ namespace Constants {
             "The Renegade", L"open Captains_P"
         },
         {
+            "The Archive", L"open Evacuation_P"
+        },
+        {
             "Sentinel", L"open Ruins_P"
         },
         {
