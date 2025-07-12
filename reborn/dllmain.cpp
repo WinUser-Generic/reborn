@@ -364,7 +364,7 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 5;
+    unsigned int NumPlayersToStart = 1;
 
     unsigned int TeamMinSizeForStart = 0;
 
@@ -415,6 +415,8 @@ namespace Globals {
     bool OperationsOpen = false;
 
     bool amStandalone = false;
+
+    bool DirectConnectOpen = false;
 
     bool didStandaloneCharacterInitialization = false;
 
@@ -805,8 +807,6 @@ namespace ServerNetworking {
 
                 if (ch && ch->Connection) {
                     (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
-                    //reinterpret_cast<char(*)(UActorChannel*)>(Globals::baseAddress + 0x74E80)(ch);
-                    //reinterpret_cast<char(*)(UActorChannel*)>(Globals::baseAddress + 0x75040)(ch);
                 }
             }
 
@@ -1020,6 +1020,10 @@ namespace Metagame {
 }
 
 namespace Overlay {
+    void OpenDirectConnect() {
+        Globals::DirectConnectOpen = true;
+    }
+
     void StartLaunchSequence(const wchar_t* command) {
         Globals::LaunchSequenceState = Globals::ELaunchSequenceState::CharacterSelect;
         Globals::LaunchCommand = command;
@@ -1051,6 +1055,53 @@ namespace Overlay {
     }
 
     void Render() {
+        if (Globals::DirectConnectOpen) {
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.25f, ImGui::GetIO().DisplaySize.y * 0.25f), ImGuiCond_Always);
+            ImGui::Begin("Direct Connect", &Globals::DirectConnectOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            ImVec2 textSize;
+            textSize = ImGui::CalcTextSize("Direct Connect");
+
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+
+            float centerX = (windowWidth - textSize.x) * 0.5f;
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
+
+            ImGui::Text("Direct Connect");
+
+            static std::string ipToConnectTo = "";
+
+            ImGui::InputText("Enter Server IP: ", &ipToConnectTo);
+
+            float availWidth = ImGui::GetContentRegionAvail().x;
+            float spacing = ImGui::GetStyle().ItemSpacing.x;
+            float buttonWidth = (availWidth - spacing) * 0.5f;
+
+            if (ImGui::Button("Close", ImVec2(buttonWidth, 0))) {
+                Globals::DirectConnectOpen = false;
+            }
+
+            ImGui::SameLine();
+
+            if (!ipToConnectTo.empty()) {
+                if (ImGui::Button("Start!", ImVec2(buttonWidth, 0))) {
+                    Globals::DirectConnectOpen = false;
+
+                    std::wstring wIp(ipToConnectTo.begin(), ipToConnectTo.end());
+                    
+                    std::wstring wcmd = L"open ";
+
+                    StartLaunchSequence((wcmd.append(wIp)).c_str());
+                }
+            }
+
+            ImGui::End();
+        }
+
         if (Globals::LaunchSequenceState > Globals::ELaunchSequenceState::NotOpen) {
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
@@ -1203,6 +1254,7 @@ namespace Overlay {
             if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
                 if (ImGui::Button("Start!", ImVec2(buttonWidth, 0))) {
                     Globals::LaunchSequenceState = Globals::ELaunchSequenceState::NotOpen;
+                    std::cout << "[GAME] Entering the match!" << std::endl;
                     EngineLogic::ExecConsoleCommand(Globals::LaunchCommand);
                 }
             }
@@ -1687,8 +1739,9 @@ namespace Hooks{
 
     void MainPanelClickedHook(uint32_t PanelId) {
         std::cout << PanelId << std::endl;
-        if (PanelId == 1) { // Versus Private
-            Overlay::StartLaunchSequence(L"open 127.0.0.1");
+        if (PanelId == 1) { // Versus Public
+            EngineLogic::ExecConsoleCommand(L"open 127.0.0.1");
+            Overlay::OpenDirectConnect();
         }
         if (PanelId == 4) { // Versus Private
             Overlay::OpenSoloVSAI();
@@ -1963,13 +2016,13 @@ namespace Hooks{
                 UPoplarPerkFunction* perkTwo = nullptr;
                 UPoplarPerkFunction* perkThree = nullptr;
 
-                if(jsonObj["perkOne"])
+                if(jsonObj.contains("perkOne"))
                     perkOne = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkOne"]);
 
-                if(jsonObj["perkTwo"])
+                if(jsonObj.contains("perkTwo"))
                     perkTwo = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkTwo"]);
 
-                if(jsonObj["perkThree"])
+                if(jsonObj.contains("perkThree"))
                     perkThree = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkThree"]);
 
                 std::string playerName = jsonObj["playerName"];
@@ -2015,11 +2068,6 @@ namespace Hooks{
                     ppc->MyPoplarPRI->PlayerNameTruncatedHTML = FString(wName.c_str());
                     */
                 }
-
-                //ppc->eventServerSelectCharacter(playerClass, nullptr, nullptr, true);
-
-                //ppc->eventSwitchPoplarPlayerClass(playerClass);
-                //ppc->ServerRestartPlayer();
             }
 
             return;
@@ -2179,6 +2227,12 @@ namespace Hooks{
         bool ret = ConsoleCommand.call<bool>(a1, a2, a3);
 
         return ret;
+    }
+
+    SafetyHookInline PeriodicGC;
+
+    bool PeriodicGCHook(float a1) {
+        return 1;
     }
 
     HWND window = NULL;
@@ -2368,6 +2422,7 @@ namespace Init {
             Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
             Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
             Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
+            Hooks::PeriodicGC = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8F030), &Hooks::PeriodicGCHook);
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
