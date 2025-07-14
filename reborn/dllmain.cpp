@@ -18,7 +18,9 @@
 #include <filesystem>
 #include <shlobj.h>
 #include <fstream>
+#include <shellapi.h>
 #include "json.hpp"
+#include "httplib.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -367,12 +369,36 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 1;
+    unsigned int NumPlayersToStart = 4;
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Caverns_P"; //
+    const wchar_t* MapString = L"open Wishbone_P";
+
+    bool amRunningWithGameCoordinator = false;
+
+    std::string GameCoordinatorBase = "";
+
+    std::string GameCoordinatorKey = "";
 }
+
+struct ServerBrowserEntry {
+    std::string InstanceName = "";
+    std::string HumanReadableInstanceMapMode = "";
+    int CurrentNumPlayers = 0;
+    int MaxNumPlayers = 0;
+    std::string ServerConnectString = "";
+    bool MatchStarted = false;
+
+    ServerBrowserEntry(const nlohmann::json& inJson) {
+        InstanceName = inJson["instanceName"];
+        HumanReadableInstanceMapMode = inJson["humanReadableInstanceMapMode"];
+        CurrentNumPlayers = inJson["currentNumPlayers"];
+        MaxNumPlayers = inJson["maxNumPlayers"];
+        ServerConnectString = inJson["serverConnectString"];
+        MatchStarted = inJson["matchStarted"];
+    }
+};
 
 namespace Globals {
     uintptr_t baseAddress = 0x0;
@@ -421,6 +447,8 @@ namespace Globals {
 
     bool DirectConnectOpen = false;
 
+    bool ServerBrowserOpen = false;
+
     bool didStandaloneCharacterInitialization = false;
 
     float timeTillMutationInit = 0.0f;
@@ -436,6 +464,12 @@ namespace Globals {
     static Metagame::Item* GearSlotOne = nullptr;
     static Metagame::Item* GearSlotTwo = nullptr;
     static Metagame::Item* GearSlotThree = nullptr;
+
+    float timeSinceGameControllerServerPoll = 0.0f;
+
+    std::shared_ptr<httplib::Client> GameCoordinatorHttpClient;
+
+    std::vector<ServerBrowserEntry> ServerBrowserEntries = std::vector<ServerBrowserEntry>();
 
     enum ELaunchSequenceState : int8_t {
         NotOpen = 0,
@@ -582,6 +616,15 @@ namespace ImguiUtils {
 }
 
 namespace ServerNetworking {
+    void GameControllerPoll() {
+        nlohmann::json jsonBody = nlohmann::json();
+
+        jsonBody["ConnectedPlayers"] = Globals::connections.size();
+        jsonBody["HumansHaveStarted"] = Globals::haveHumansStarted;
+        
+        Globals::GameCoordinatorHttpClient.get()->Post("/api/games/server-poll", jsonBody.dump(), "application/json");
+    }
+
     void InitListen() {
         SDKUtils::GetLastOfClass<UGameEngine>()->CreateNamedNetDriver(FName(020724));
 
@@ -1024,7 +1067,40 @@ namespace Metagame {
     }
 }
 
+namespace GameCoordinator {
+    void RefreshServerBrowser() {
+        httplib::Result result;
+
+        if (!Globals::GameCoordinatorHttpClient.get()) {
+            Globals::GameCoordinatorHttpClient = std::make_shared<httplib::Client>("gc.bereborn.dev:5000");
+        }
+
+        result = Globals::GameCoordinatorHttpClient.get()->Get("/api/games");
+        
+        if (!result || result->status != 200) {
+            std::cout << "[NETWORKING] Failed to refresh server list!" << std::endl;
+            return;
+        }
+
+        Globals::ServerBrowserEntries.clear();
+
+        std::vector<nlohmann::json> entries = nlohmann::json::parse(result->body).get<std::vector<nlohmann::json>>();
+        
+        for (nlohmann::json browserEntry : entries) {           
+            Globals::ServerBrowserEntries.push_back(ServerBrowserEntry(browserEntry));
+        }
+
+        return;
+    }
+}
+
 namespace Overlay {
+    void OpenServerBrowser() {
+        GameCoordinator::RefreshServerBrowser();
+
+        Globals::ServerBrowserOpen = true;
+    }
+
     void OpenDirectConnect() {
         Globals::DirectConnectOpen = true;
     }
@@ -1060,10 +1136,122 @@ namespace Overlay {
     }
 
     void Render() {
+        if (Globals::ServerBrowserOpen) {
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
+            ImGui::Begin("Server Browser", &Globals::ServerBrowserOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            ImVec2 textSize;
+            textSize = ImGui::CalcTextSize("Server Browser");
+
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+
+            float centerX = (windowWidth - textSize.x) * 0.5f;
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
+
+            ImGui::Text("Server Browser");
+
+            float availWidth = ImGui::GetContentRegionAvail().x;
+            float spacing = ImGui::GetStyle().ItemSpacing.x;
+            float buttonWidth = (availWidth - spacing) * 0.25f;
+
+            if (ImGui::Button("RCON Admin", ImVec2(buttonWidth, 0))) {
+                
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Direct Connect", ImVec2(buttonWidth, 0))) {
+                Globals::ServerBrowserOpen = false;
+                Globals::DirectConnectOpen = true;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Refresh Server Browser", ImVec2(buttonWidth, 0))) {
+                GameCoordinator::RefreshServerBrowser();
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Close", ImVec2(buttonWidth, 0))) {
+                Globals::ServerBrowserOpen = false;
+            }
+
+            if (ImGui::BeginTable("ServerBrowserTable", 5,
+                ImGuiTableFlags_Borders |
+                ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_Resizable |
+                ImGuiTableFlags_Sortable |
+                ImGuiTableFlags_ScrollY)) {
+
+                // Setup table headers
+                ImGui::TableSetupColumn("Server Name", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Map & Mode", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                ImGui::TableSetupColumn("Players", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableHeadersRow();
+
+                for (size_t i = 0; i < Globals::ServerBrowserEntries.size(); ++i) {
+                    const auto& server = Globals::ServerBrowserEntries[i];
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(server.InstanceName.c_str());
+
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextUnformatted(server.HumanReadableInstanceMapMode.c_str());
+
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%d/%d", server.CurrentNumPlayers, server.MaxNumPlayers);
+
+                    ImGui::TableSetColumnIndex(3);
+                    if (server.MatchStarted) {
+                        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "In Progress");
+                    }
+                    else {
+                        ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f), "Joinable!");
+                    }
+
+                    ImGui::TableSetColumnIndex(4);
+
+                    ImGui::PushID(static_cast<int>(i));
+
+                    bool canJoin = server.CurrentNumPlayers < server.MaxNumPlayers && !server.MatchStarted;
+                    if (!canJoin) {
+                        ImGui::BeginDisabled();
+                    }
+
+                    if (ImGui::Button("Join")) {
+                        Globals::ServerBrowserOpen = false;
+
+                        std::wstring wLaunchCommand = std::wstring(server.ServerConnectString.begin(), server.ServerConnectString.end());
+
+                        StartLaunchSequence(wcsdup(wLaunchCommand.c_str()));
+                    }
+
+                    if (!canJoin) {
+                        ImGui::EndDisabled();
+                    }
+
+                    ImGui::PopID();
+                }
+
+                ImGui::EndTable();
+            }
+
+            ImGui::End();
+        }
+
         if (Globals::DirectConnectOpen) {
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.25f, ImGui::GetIO().DisplaySize.y * 0.25f), ImGuiCond_Always);
-            ImGui::Begin("Direct Connect", &Globals::DirectConnectOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+            ImGui::Begin("Direct Connect", &Globals::DirectConnectOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
 
             ImGui::SetWindowFontScale(2.0f);
 
@@ -1110,7 +1298,7 @@ namespace Overlay {
         if (Globals::LaunchSequenceState > Globals::ELaunchSequenceState::NotOpen) {
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
-            ImGui::Begin("Launch Sequence", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+            ImGui::Begin("Launch Sequence", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
 
             ImGui::SetWindowFontScale(2.0f);
 
@@ -1297,7 +1485,7 @@ namespace Overlay {
 
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
-            ImGui::Begin("Reborn Save Manager", &Globals::SaveManagerOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+            ImGui::Begin("Reborn Save Manager", &Globals::SaveManagerOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
             ImGui::SetWindowFontScale(2.0f);
 
             if (ImGui::Button("+ New Save", ImVec2(-1.0f, 0))) {
@@ -1326,7 +1514,7 @@ namespace Overlay {
 
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
-            ImGui::Begin("Solo VS AI", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+            ImGui::Begin("Solo VS AI", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
 
             ImGui::SetWindowFontScale(2.0f);
 
@@ -1419,7 +1607,7 @@ namespace Overlay {
 
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
-            ImGui::Begin("Campaign", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+            ImGui::Begin("Campaign", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
 
             ImGui::SetWindowFontScale(2.0f);
 
@@ -1466,7 +1654,7 @@ namespace Overlay {
 
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
-            ImGui::Begin("Operations", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
+            ImGui::Begin("Operations", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
 
             ImGui::SetWindowFontScale(2.0f);
 
@@ -1537,6 +1725,10 @@ namespace Overlay {
     void StartLaunchSequence(const wchar_t* command); // what the fuck is a header file
 }
 
+namespace Init {
+    void ServerConfig();
+}
+
 namespace Hooks{
     SafetyHookInline ProcessRemoteFunction;
 
@@ -1587,6 +1779,16 @@ namespace Hooks{
 
     void GameEngineTickHook(UGameEngine* engine, float DeltaTime) {
         GameEngineTick.call<void>(engine, DeltaTime);
+
+        if (Globals::amServer && Settings::amRunningWithGameCoordinator) {
+            Globals::timeSinceGameControllerServerPoll += DeltaTime;
+
+            if (Globals::timeSinceGameControllerServerPoll > 5.0f) {
+                Globals::timeSinceGameControllerServerPoll = 0.0f;
+
+                ServerNetworking::GameControllerPoll();
+            }
+        }
 
         if (Globals::amStandalone) {
             if (Globals::timeTillMutationInit > 0.0f) {
@@ -1764,8 +1966,8 @@ namespace Hooks{
 
     void MainPanelClickedHook(uint32_t PanelId) {
         std::cout << PanelId << std::endl;
-        if (PanelId == 1) { // Versus Public
-            Overlay::OpenDirectConnect();
+        if (PanelId == 1 || PanelId == 2 || PanelId == 6) { // Versus Public; Story Public; Operations Public
+            Overlay::OpenServerBrowser();
         }
         if (PanelId == 4) { // Versus Private
             Overlay::OpenSoloVSAI();
@@ -2239,21 +2441,9 @@ namespace Hooks{
     SafetyHookInline ConsoleCommand;
 
     bool ConsoleCommandHook(__int64 a1, const wchar_t* a2, __int64 a3) {
-        static __int64 cachedA3 = 0x0;
-        static __int64 cachedA1 = 0x0;
-
-        if (a1 && a3 && !cachedA3) {
-            std::cout << "[ENGINE] Console commands enabled!" << std::endl;
-            cachedA3 = a3;
-            cachedA1 = a1;
-        }
-
-        if (!a3) {
-            a1 = cachedA1;
-            a3 = cachedA3;
-        }
-
         if (Globals::amServer && !Globals::hasDoneInitialTravel) {
+            Init::ServerConfig();
+
             Globals::hasDoneInitialTravel = true;
             a2 = Settings::MapString;
         }
@@ -2565,6 +2755,51 @@ namespace Init {
         
         Hooks::Present = safetyhook::create_inline(Globals::methodsTable[8], Hooks::PresentHook);
         Hooks::ResizeBuffers = safetyhook::create_inline(Globals::methodsTable[13], Hooks::ResizeBuffersHook);
+    }
+
+    void FetchGameCoordinatorConfig() {
+        httplib::Result result = Globals::GameCoordinatorHttpClient.get()->Get("/api/games/server-config");
+
+        std::string response = result->body;
+
+        nlohmann::json serverConfigJSON = nlohmann::json::parse(response);
+
+        std::string serverStartupCommand = serverConfigJSON["serverStartupCommand"].get<std::string>();
+
+        Settings::MapString = wcsdup(std::wstring(serverStartupCommand.begin(), serverStartupCommand.end()).c_str());
+            
+        Settings::NumPlayersToStart = serverConfigJSON["maxNumPlayers"].get<int>();
+        Settings::gamePort = serverConfigJSON["port"].get<int>();
+    }
+
+    void ServerConfig() {
+        LPWSTR cmdLine = GetCommandLineW();
+        int argc;
+        LPWSTR* argv = CommandLineToArgvW(cmdLine, &argc);
+
+        if (argc >= 3) {
+            if (std::wstring(argv[3]).contains(L"GameCoordinator")) {
+                Settings::amRunningWithGameCoordinator = true;
+            }
+        }
+
+        if (Settings::amRunningWithGameCoordinator) {
+            std::cout << "[NETWORKING] Init in game coordinator mode!" << std::endl;
+
+            std::wstring wBase(argv[4]);
+            Settings::GameCoordinatorBase = std::string(wBase.begin(), wBase.end());
+
+            std::wstring wKey(argv[5]);
+            Settings::GameCoordinatorKey = std::string(wKey.begin(), wKey.end());
+
+            Globals::GameCoordinatorHttpClient = std::make_shared<httplib::Client>(Settings::GameCoordinatorBase);
+
+            Globals::GameCoordinatorHttpClient.get()->set_default_headers({
+                {"X-Server-Token", Settings::GameCoordinatorKey}
+            });
+
+            FetchGameCoordinatorConfig();
+        }
     }
 }
 
