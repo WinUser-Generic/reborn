@@ -29,6 +29,7 @@ public class SessionCleanupService : BackgroundService
 		{
 			if(instance.LastUpdateTime.HasValue && (DateTime.UtcNow - instance.LastUpdateTime).Value.Seconds > 10)
 			{
+				/*
 				if (instance.PID.HasValue)
 				{
 					Process? process = Process.GetProcessById(instance.PID.Value);
@@ -38,6 +39,7 @@ public class SessionCleanupService : BackgroundService
 						process.Kill();
 					}
 				}
+				*/
 			}
 		}
 

@@ -673,7 +673,7 @@ namespace ServerNetworking {
         std::vector<AActor*> ret = std::vector<AActor*>();
 
         for (AActor* actor : considerListFirstPass) {
-            if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete) {
+            if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete || actor->ObjectFlags & 0x2000000000000000 || actor->IsA<AEmitter>()) {
                 continue;
             }
             else {
@@ -812,7 +812,7 @@ namespace ServerNetworking {
 
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
 
-                if (!channel && actor && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1)) {
+                if (!channel && actor && !(actor->ObjectFlags & 0x2000000000000000) && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1)) {
                     //printf("[NETWORKING] No channel, creating...\n");
 
                     channel = reinterpret_cast<UActorChannel * (__thiscall*)(UNetConnection * connection, int channelType, uint32_t openedLocally, int chIndex)>(Globals::baseAddress + 0x061daa0)(connection, 2, 1, -1);
@@ -824,7 +824,7 @@ namespace ServerNetworking {
                 }
 
 
-                if (channel && channel->Actor && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1) && channel->NumOutRec < 0xFE) {
+                if (channel && channel->Actor && !(actor->ObjectFlags & 0x2000000000000000) && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1) && channel->NumOutRec < 0xFE) {
                     //printf("[NETWORKING] Replication time!\n");
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
                     if (channel->Actor) {
@@ -1107,6 +1107,9 @@ namespace Overlay {
 
     void StartLaunchSequence(const wchar_t* command) {
         Globals::LaunchSequenceState = Globals::ELaunchSequenceState::CharacterSelect;
+        Globals::GearSlotOne = nullptr;
+        Globals::GearSlotTwo = nullptr;
+        Globals::GearSlotThree = nullptr;
         Globals::LaunchCommand = command;
     }
 
@@ -1228,6 +1231,7 @@ namespace Overlay {
                     }
 
                     if (ImGui::Button("Join")) {
+                        Globals::amStandalone = false;
                         Globals::ServerBrowserOpen = false;
 
                         std::wstring wLaunchCommand = std::wstring(server.ServerConnectString.begin(), server.ServerConnectString.end());
@@ -1285,6 +1289,8 @@ namespace Overlay {
                     std::wstring wIp(ipToConnectTo.begin(), ipToConnectTo.end());
                     
                     std::wstring wcmd = L"open ";
+
+                    Globals::amStandalone = false;
 
                     StartLaunchSequence(wcsdup((wcmd.append(wIp).c_str())));
 
@@ -1854,7 +1860,7 @@ namespace Hooks{
                 bool tickTheDoomTimer = true;
 
                 for (UNetConnection* Connection : Globals::connections) {
-                    if (Connection && (APoplarPlayerController*)Connection->Actor && (((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView)) {
+                    if (Connection && (APoplarPlayerController*)Connection->Actor && (((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) && (((APoplarPlayerController*)Connection->Actor)->TestPerk.bActive)) {
                         tickTheDoomTimer = false;
                         break;
                     }
@@ -2777,7 +2783,7 @@ namespace Init {
         int argc;
         LPWSTR* argv = CommandLineToArgvW(cmdLine, &argc);
 
-        if (argc >= 3) {
+        if (argc > 3) {
             if (std::wstring(argv[3]).contains(L"GameCoordinator")) {
                 Settings::amRunningWithGameCoordinator = true;
             }
