@@ -673,7 +673,7 @@ namespace ServerNetworking {
         std::vector<AActor*> ret = std::vector<AActor*>();
 
         for (AActor* actor : considerListFirstPass) {
-            if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete || actor->ObjectFlags & 0x2000000000000000 || actor->IsA<AEmitter>()) {
+            if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete || actor->ObjectFlags & 0x2000000000000000 || actor->Class == AEmitter::StaticClass()) { // 
                 continue;
             }
             else {
@@ -773,6 +773,9 @@ namespace ServerNetworking {
             for (AActor* actor : actors) {
                 if (!actor)
                     continue;
+                
+                if (actor->ObjectFlags & 0x2000000000000000)
+                    continue;
 
                 if (!(*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1))
                     continue;
@@ -781,9 +784,16 @@ namespace ServerNetworking {
                     continue;
                 }
 
+                bool markedAsNoGC = false;
+
+                if (!(actor->ObjectFlags & 0x0000008000000000)) {
+                    actor->ObjectFlags |= 0x0000008000000000;
+                    markedAsNoGC = true;
+                }
+
                 (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
 
-                if (actor->bNetTemporary) {
+                if (actor->bNetTemporary || actor->bTearOff) {
                     bool shouldContinue = false;
 
                     for (auto pair : Globals::sentTemporaries) {
@@ -813,7 +823,7 @@ namespace ServerNetworking {
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
 
                 if (!channel && actor && !(actor->ObjectFlags & 0x2000000000000000) && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1)) {
-                    //printf("[NETWORKING] No channel, creating...\n");
+                    printf("[NETWORKING] No channel for %s, creating...\n", actor->GetFullName().c_str());
 
                     channel = reinterpret_cast<UActorChannel * (__thiscall*)(UNetConnection * connection, int channelType, uint32_t openedLocally, int chIndex)>(Globals::baseAddress + 0x061daa0)(connection, 2, 1, -1);
 
@@ -830,6 +840,10 @@ namespace ServerNetworking {
                     if (channel->Actor) {
                         channel->Actor->NetTag++;
                     }
+                }
+
+                if (markedAsNoGC && actor) {
+                    actor->ObjectFlags &= ~(0x0000008000000000);
                 }
             }
         }
@@ -1096,7 +1110,8 @@ namespace GameCoordinator {
 
 namespace Overlay {
     void OpenServerBrowser() {
-        GameCoordinator::RefreshServerBrowser();
+        std::thread t(GameCoordinator::RefreshServerBrowser);
+        t.detach();
 
         Globals::ServerBrowserOpen = true;
     }
@@ -1175,7 +1190,8 @@ namespace Overlay {
             ImGui::SameLine();
 
             if (ImGui::Button("Refresh Server Browser", ImVec2(buttonWidth, 0))) {
-                GameCoordinator::RefreshServerBrowser();
+                std::thread t(GameCoordinator::RefreshServerBrowser);
+                t.detach();
             }
 
             ImGui::SameLine();
@@ -1786,13 +1802,28 @@ namespace Hooks{
     void GameEngineTickHook(UGameEngine* engine, float DeltaTime) {
         GameEngineTick.call<void>(engine, DeltaTime);
 
+        if (Globals::amServer) {
+            /*
+            static float timeSinceLoggedChannels = 0.0f;
+
+            timeSinceLoggedChannels += DeltaTime;
+
+            if (timeSinceLoggedChannels >= 5.0f) {
+                timeSinceLoggedChannels = 0.0f;
+
+                std::cout << "[NETWORKING] " << SDKUtils::GetAllOfClass<UActorChannel>().size() << std::endl;
+            }
+            */
+        }
+
         if (Globals::amServer && Settings::amRunningWithGameCoordinator) {
             Globals::timeSinceGameControllerServerPoll += DeltaTime;
 
             if (Globals::timeSinceGameControllerServerPoll > 5.0f) {
                 Globals::timeSinceGameControllerServerPoll = 0.0f;
 
-                ServerNetworking::GameControllerPoll();
+                std::thread t(ServerNetworking::GameControllerPoll);
+                t.detach();
             }
         }
 
@@ -2622,6 +2653,23 @@ namespace Hooks{
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
         return Present.call<HRESULT>(pSwapChain, SyncInterval, Flags);
     }
+
+    SafetyHookInline CrashyShit;
+
+    char CrashyShitHook(__int64 a1, UObject* a2) {
+        if ((__int64)a2 == 0x0000000200000000) {
+            std::cout << "Saved!" << std::endl;
+            return 1;
+        }
+
+        return CrashyShit.call<char>(a1, a2);
+    }
+
+    SafetyHookInline ReferenceNullifier;
+
+    __int64 ReferenceNullifierHook(__int64 a1, __int64 a2) {
+        return 0;
+    }
 }
 
 namespace Init {
@@ -2649,14 +2697,15 @@ namespace Init {
     void Hooks() {
         if (Globals::amServer) {
             Hooks::DestroyActor = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3EF070), &Hooks::DestroyActorHook);
-            Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x16EC4D0), &Hooks::JustDoNothingHook);
-            Hooks::JustDoNothing2 = safetyhook::create_inline((void*)(Globals::baseAddress + 0xE5F320), &Hooks::JustDoNothingHook);
+            //Hooks::JustDoNothing = safetyhook::create_inline((void*)(Globals::baseAddress + 0x16EC4D0), &Hooks::JustDoNothingHook);
+            //Hooks::JustDoNothing2 = safetyhook::create_inline((void*)(Globals::baseAddress + 0xE5F320), &Hooks::JustDoNothingHook);
             Hooks::PoplarGameInfoSetup = safetyhook::create_inline((void*)(Globals::baseAddress + 0x1474140), &Hooks::PoplarGameInfoSetupHook);
             Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
             Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
             Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
             Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
-            Hooks::PeriodicGC = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8F030), &Hooks::PeriodicGCHook);
+            //Hooks::PeriodicGC = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8F030), &Hooks::PeriodicGCHook);
+            //Hooks::CrashyShit = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3D7030), &Hooks::CrashyShitHook);
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
