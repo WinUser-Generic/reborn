@@ -519,6 +519,11 @@ namespace SDKUtils {
         for (int i = 0; i < UObject::GObjObjects()->size(); i++) {
             UObject* obj = UObject::GObjObjects()->at(i);
 
+            if (((uintptr_t)obj) == 0x0000000200000000) {
+                std::cout << "saved you but from another place :3" << std::endl;
+                UObject::GObjObjects()->at(i) = nullptr;
+            }
+
             if (obj && obj->IsA(theClass))
                 ret.push_back((T*)obj);
         }
@@ -576,7 +581,8 @@ namespace EngineLogic {
     }
 
     UObject* ScuffedDuplicateObject(UObject* InObject, UObject* Outer) {
-        return reinterpret_cast<UObject*(*)(UObject* SourceObject, UObject* RootObject, UObject* DestOuter, const wchar_t* DestName, __int64 FlagMask, UClass* DestClass)>(Globals::baseAddress + 0x8C390)(InObject, InObject, Outer, L"None", 0x0, InObject->Class);
+        UObject* ret = reinterpret_cast<UObject*(*)(UObject* SourceObject, UObject* RootObject, UObject* DestOuter, const wchar_t* DestName, __int64 FlagMask, UClass* DestClass)>(Globals::baseAddress + 0x8C390)(InObject, InObject, Outer, L"None", 0x0, InObject->Class);
+        return ret;
     }
 
     void ExecConsoleCommand(const wchar_t* command) {
@@ -823,7 +829,7 @@ namespace ServerNetworking {
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
 
                 if (!channel && actor && !(actor->ObjectFlags & 0x2000000000000000) && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1)) {
-                    printf("[NETWORKING] No channel for %s, creating...\n", actor->GetFullName().c_str());
+                    //printf("[NETWORKING] No channel for %s, creating...\n", actor->GetFullName().c_str());
 
                     channel = reinterpret_cast<UActorChannel * (__thiscall*)(UNetConnection * connection, int channelType, uint32_t openedLocally, int chIndex)>(Globals::baseAddress + 0x061daa0)(connection, 2, 1, -1);
 
@@ -865,7 +871,7 @@ namespace ServerNetworking {
 
                 Globals::channelsToClose.pop_back();
 
-                if (ch && ch->Connection) {
+                if (ch && ch->Connection && ch->Actor) {
                     (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
                 }
             }
@@ -2043,7 +2049,7 @@ namespace Hooks{
         if (!updateHelixMenuStateUFunction)
             updateHelixMenuStateUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerStateInfo.UpdateHelixMenuState");
 
-        if (function == updateHelixMenuStateUFunction) {
+        if (function == updateHelixMenuStateUFunction && !Globals::amServer) {
             ProcessEvent.call<void>(object, function, params);
 
             APoplarPlayerStateInfo* ppsi = reinterpret_cast<APoplarPlayerStateInfo*>(object);
@@ -2076,7 +2082,7 @@ namespace Hooks{
         if (!serverTryBuyNextTierUFunction)
             serverTryBuyNextTierUFunction = UFunction::FindFunction("Function PoplarGame.PoplarPlayerReplicationInfo.ServerTryBuyNextTierForAugmentation");
 
-        if (function == serverTryBuyNextTierUFunction) {
+        if (function == serverTryBuyNextTierUFunction && !Globals::amServer) {
             APoplarPlayerReplicationInfo* ppri = reinterpret_cast<APoplarPlayerReplicationInfo*>(object);
 
             UPoplarAugDefinition* def = ((APoplarPlayerReplicationInfo_eventServerTryBuyNextTierForAugmentation_Params*)(params))->AugDef;
@@ -2293,7 +2299,7 @@ namespace Hooks{
                 std::wstring wName(playerName.begin(), playerName.end());
 
                 if (playerClass) {
-                    ppc->eventServerSelectCharacter(playerClass, nullptr, nullptr, true);
+                    //ppc->eventServerSelectCharacter(playerClass, nullptr, nullptr, true);
 
                     ppc->eventSwitchPoplarPlayerClass(playerClass);
 
@@ -2670,6 +2676,19 @@ namespace Hooks{
     __int64 ReferenceNullifierHook(__int64 a1, __int64 a2) {
         return 0;
     }
+
+    SafetyHookMid GCUnfucker;
+
+    void GCUnfuckerHook(safetyhook::Context& ctx) { //8F7D3
+        if (ctx.rax == 0x0000000200000000) {
+            ctx.rax = 0;
+            std::cout << "saved you :3" << std::endl;
+            if(ctx.rdi)
+                std::cout << ((UObject*)ctx.rdi)->GetFullName() << std::endl;
+
+            ctx.rdi = 0;
+        }
+    }
 }
 
 namespace Init {
@@ -2706,6 +2725,7 @@ namespace Init {
             Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
             //Hooks::PeriodicGC = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8F030), &Hooks::PeriodicGCHook);
             //Hooks::CrashyShit = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3D7030), &Hooks::CrashyShitHook);
+            Hooks::GCUnfucker = safetyhook::create_mid((void*)(Globals::baseAddress + 0x8F7D3), &Hooks::GCUnfuckerHook);
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
