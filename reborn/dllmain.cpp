@@ -519,11 +519,6 @@ namespace SDKUtils {
         for (int i = 0; i < UObject::GObjObjects()->size(); i++) {
             UObject* obj = UObject::GObjObjects()->at(i);
 
-            if (((uintptr_t)obj) == 0x0000000200000000) {
-                std::cout << "saved you but from another place :3" << std::endl;
-                UObject::GObjObjects()->at(i) = nullptr;
-            }
-
             if (obj && obj->IsA(theClass))
                 ret.push_back((T*)obj);
         }
