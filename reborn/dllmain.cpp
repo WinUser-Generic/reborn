@@ -2500,12 +2500,6 @@ namespace Hooks{
         return ret;
     }
 
-    SafetyHookInline PeriodicGC;
-
-    bool PeriodicGCHook(float a1) {
-        return 1;
-    }
-
     HWND window = NULL;
     WNDPROC oWndProc;
     ID3D11Device* pDevice = NULL;
@@ -2659,36 +2653,6 @@ namespace Hooks{
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
         return Present.call<HRESULT>(pSwapChain, SyncInterval, Flags);
     }
-
-    SafetyHookInline CrashyShit;
-
-    char CrashyShitHook(__int64 a1, UObject* a2) {
-        if ((__int64)a2 == 0x0000000200000000) {
-            std::cout << "Saved!" << std::endl;
-            return 1;
-        }
-
-        return CrashyShit.call<char>(a1, a2);
-    }
-
-    SafetyHookInline ReferenceNullifier;
-
-    __int64 ReferenceNullifierHook(__int64 a1, __int64 a2) {
-        return 0;
-    }
-
-    SafetyHookMid GCUnfucker;
-
-    void GCUnfuckerHook(safetyhook::Context& ctx) { //8F7D3
-        if (ctx.rax == 0x0000000200000000) {
-            ctx.rax = 0;
-            std::cout << "saved you :3" << std::endl;
-            if(ctx.rdi)
-                std::cout << ((UObject*)ctx.rdi)->GetFullName() << std::endl;
-
-            ctx.rdi = 0;
-        }
-    }
 }
 
 namespace Init {
@@ -2721,9 +2685,6 @@ namespace Init {
             Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
             Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
             Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
-            //Hooks::PeriodicGC = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8F030), &Hooks::PeriodicGCHook);
-            //Hooks::CrashyShit = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3D7030), &Hooks::CrashyShitHook);
-            Hooks::GCUnfucker = safetyhook::create_mid((void*)(Globals::baseAddress + 0x8F7D3), &Hooks::GCUnfuckerHook);
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);
