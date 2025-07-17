@@ -369,7 +369,7 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 4;
+    unsigned int NumPlayersToStart = 1;
 
     unsigned int TeamMinSizeForStart = 0;
 
@@ -658,7 +658,7 @@ namespace ServerNetworking {
         if (connection) {
             for (UChannel* channel : connection->Channels) {
                 if (channel) {
-                    if (channel->IsA<UActorChannel>() && ((UActorChannel*)channel)->Actor == actor) {
+                    if (channel->Class == UActorChannel::StaticClass() && ((UActorChannel*)channel)->Actor == actor) {
                         return (UActorChannel*)channel;
                     }
                 }
