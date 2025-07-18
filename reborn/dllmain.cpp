@@ -2030,6 +2030,22 @@ namespace Hooks{
         }
         */
 
+        static UFunction* eventNotifyDisconnectUFunction = nullptr;
+
+        if(!eventNotifyDisconnectUFunction)
+            eventNotifyDisconnectUFunction = UFunction::FindFunction("Function Engine.PlayerController.NotifyDisconnect");
+
+        if (function == eventNotifyDisconnectUFunction) {
+            std::cout << "[NETWORKING] Player notifyDisconnect!" << std::endl;
+
+            Globals::connections.erase(std::remove_if(Globals::connections.begin(), Globals::connections.end(), [&object](UNetConnection* cmp) {
+                if (cmp->Actor == object)
+                    std::cout << "[NETWORKING] Player disconnected!" << std::endl;
+
+                return cmp->Actor == object;
+                }), Globals::connections.end());
+        }
+
         static UFunction* clientTravelUFunction = nullptr;
 
         if (!clientTravelUFunction)
@@ -2133,6 +2149,11 @@ namespace Hooks{
         if (function == characterPossessionUFunction) {
             if (!Globals::amStandalone) { // In theory should never happen outside of networked play, but I've been wrong before...
                 APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
+
+                if (!Globals::amServer) {
+                    SDKUtils::GetLastOfClass< UMHW_DeathRecap>()->SetVisible(false, 0.0f);
+                }
+
                 if (ppc->MyPoplarPRI) {
                     if (Globals::amServer && ppc->TestPerk.bActive && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
                         bool alreadySetup = false;
