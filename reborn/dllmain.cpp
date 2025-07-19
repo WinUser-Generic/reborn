@@ -369,11 +369,11 @@ namespace Settings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 1;
+    unsigned int NumPlayersToStart = 2;
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Wishbone_P";
+    const wchar_t* MapString = L"open Caverns_P";
 
     bool amRunningWithGameCoordinator = false;
 
@@ -674,7 +674,7 @@ namespace ServerNetworking {
         std::vector<AActor*> ret = std::vector<AActor*>();
 
         for (AActor* actor : considerListFirstPass) {
-            if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete || actor->ObjectFlags & 0x2000000000000000 || actor->Class == AEmitter::StaticClass()) { // 
+            if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete || actor->ObjectFlags & 0x2000000000000000 || actor->Class == AEmitter::StaticClass()) { //
                 continue;
             }
             else {
