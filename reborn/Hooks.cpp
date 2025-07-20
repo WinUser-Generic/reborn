@@ -301,7 +301,7 @@ namespace Hooks {
         if (!matchEndedUFunction)
             matchEndedUFunction = UFunction::FindFunction("Function PoplarGame.PoplarGameInfo.MatchEnded.Timer");
 
-        if (function == matchEndedUFunction && Globals::ShutdownTimer == 0.0f) {
+        if (Globals::amServer && !Globals::amStandalone && function == matchEndedUFunction && Globals::ShutdownTimer == 0.0f) {
             std::cout << "[GAME] Match ended, shutting down in 10sec!" << std::endl;
             
             Globals::ShutdownTimer = 10.0f;

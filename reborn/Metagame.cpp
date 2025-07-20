@@ -49,6 +49,21 @@ namespace Metagame {
             jsonObj["characterSkins"][i]["skinObjectName"] = file.characterSkins[i].skinObjectName;
         }
 
+        for (int i = 0; i < file.characterTaunts.size(); i++) {
+            jsonObj["characterTaunts"][i]["tauntDisplayName"] = file.characterTaunts[i].tauntDisplayName;
+            jsonObj["characterTaunts"][i]["tauntObjectName"] = file.characterTaunts[i].tauntObjectName;
+        }
+
+        for (int i = 0; i < file.loadouts.size(); i++) {
+            for (int j = 0; j < 0x3; j++) {
+                jsonObj["loadouts"][i]["items"][j]["itemObjectName"] = file.loadouts[i].items[j].itemObjectName;
+                jsonObj["loadouts"][i]["items"][j]["itemDisplayName"] = file.loadouts[i].items[j].itemDisplayName;
+                jsonObj["loadouts"][i]["items"][j]["itemFlavor"] = file.loadouts[i].items[j].itemFlavor;
+                jsonObj["loadouts"][i]["items"][j]["itemDescription"] = file.loadouts[i].items[j].itemDescription;
+                jsonObj["loadouts"][i]["items"][j]["level"] = file.loadouts[i].items[j].level;
+            }
+        }
+
         std::ofstream fsFile(GetSavePath() + "/" + std::to_string(saveNum) + ".rebornsave");
         fsFile << jsonObj.dump();
         fsFile.close();
@@ -91,6 +106,34 @@ namespace Metagame {
                 skin.skinDisplayName = skinJson["skinDisplayName"];
                 skin.skinObjectName = skinJson["skinObjectName"];
                 saveFile.characterSkins.push_back(skin);
+            }
+        }
+
+        if (jsonObj.contains("characterTaunts")) {
+            for (const auto& tauntJson : jsonObj["characterTaunts"]) {
+                CharacterTaunt taunt;
+                taunt.tauntDisplayName = tauntJson["tauntDisplayName"];
+                taunt.tauntObjectName = tauntJson["tauntObjectName"];
+                saveFile.characterTaunts.push_back(taunt);
+            }
+        }
+
+        if (jsonObj.contains("loadouts")) {
+            for (const auto& loadoutJson : jsonObj["loadouts"]) {
+                Loadout loadout;
+                if (loadoutJson.contains("items") && loadoutJson["items"].is_array()) {
+                    for (size_t i = 0; i < min(static_cast<size_t>(0x3), loadoutJson["items"].size()); ++i) {
+                        const auto& itemJson = loadoutJson["items"][i];
+                        Item item;
+                        item.itemObjectName = itemJson["itemObjectName"];
+                        item.itemDisplayName = itemJson["itemDisplayName"];
+                        item.itemFlavor = itemJson["itemFlavor"];
+                        item.itemDescription = itemJson["itemDescription"];
+                        item.level = itemJson["level"];
+                        loadout.items[i] = item;
+                    }
+                }
+                saveFile.loadouts.push_back(loadout);
             }
         }
 
@@ -143,6 +186,18 @@ namespace Metagame {
                     }
 
                     newSave.items.push_back(Item(perk));
+                }
+            }
+
+            for (UPoplarMetaSkinDefinition* metaSkin : SDKUtils::GetAllOfClass< UPoplarMetaSkinDefinition>()) {
+                if (!metaSkin->GetFullName().contains("Default")) {
+                    newSave.characterSkins.push_back(CharacterSkin(metaSkin));
+                }
+            }
+
+            for (UPoplarMetaTauntDefinition* metaTaunt : SDKUtils::GetAllOfClass< UPoplarMetaTauntDefinition>()) {
+                if (!metaTaunt->GetFullName().contains("Default")) {
+                    newSave.characterTaunts.push_back(CharacterTaunt(metaTaunt));
                 }
             }
         }

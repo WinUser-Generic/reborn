@@ -96,6 +96,35 @@ namespace Metagame {
     struct CharacterSkin {
         std::string skinDisplayName;
         std::string skinObjectName;
+
+        CharacterSkin(UPoplarMetaSkinDefinition* skinDef) {
+            skinDisplayName = skinDef->ItemName.ToString();
+            skinObjectName = skinDef->GetFullName();
+        }
+
+        CharacterSkin() {
+            skinDisplayName = "";
+            skinObjectName = "";
+        }
+    };
+
+    struct CharacterTaunt {
+        std::string tauntDisplayName;
+        std::string tauntObjectName;
+
+        CharacterTaunt(UPoplarMetaTauntDefinition* MetaTauntDefinition) {
+            tauntDisplayName = MetaTauntDefinition->ItemName.ToString();
+            tauntObjectName = MetaTauntDefinition->GetFullName();
+        }
+
+        CharacterTaunt() {
+            tauntDisplayName = "";
+            tauntObjectName = "";
+        }
+    };
+
+    struct Loadout {
+        Item items[0x3];
     };
 
     struct SaveFile {
@@ -104,6 +133,8 @@ namespace Metagame {
         std::vector<Item> items;
         std::vector<Character> characters;
         std::vector<CharacterSkin> characterSkins;
+        std::vector<CharacterTaunt> characterTaunts;
+        std::vector<Loadout> loadouts;
 
         SaveFile(std::string name, bool everythingUnlocked) {
             this->name = name;
@@ -112,6 +143,8 @@ namespace Metagame {
             this->characters = std::vector<Character>();
             this->items = std::vector<Item>();
             this->characterSkins = std::vector<CharacterSkin>();
+            this->characterTaunts = std::vector<CharacterTaunt>();
+            this->loadouts = std::vector<Loadout>();
         }
     };
 
