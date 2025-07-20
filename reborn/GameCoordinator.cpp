@@ -28,4 +28,27 @@ namespace GameCoordinator {
 
         return;
     }
+
+    void RefreshWaitingForPlayers() {
+        httplib::Result result;
+
+        if (!Globals::GameCoordinatorHttpClient.get()) {
+            Globals::GameCoordinatorHttpClient = std::make_shared<httplib::Client>(Constants::GameCoordinatorEndpoint);
+        }
+
+        result = Globals::GameCoordinatorHttpClient.get()->Get("/api/games");
+
+        if (!result || result->status != 200) {
+            std::cout << "[NETWORKING] Failed to refresh server list!" << std::endl;
+            return;
+        }
+
+        std::vector<nlohmann::json> entries = nlohmann::json::parse(result->body).get<std::vector<nlohmann::json>>();
+
+        if (Globals::MatchIndex < entries.size()) {
+            Globals::CurrentMatchEntry = ServerBrowserEntry(entries[Globals::MatchIndex]);
+        }
+
+        return;
+    }
 }

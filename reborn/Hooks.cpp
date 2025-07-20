@@ -145,6 +145,14 @@ namespace Hooks {
         }
 
         if (Globals::amServer) {
+            if (Globals::ShutdownTimer > 0.0f) {
+                Globals::ShutdownTimer -= DeltaTime;
+
+                if (Globals::ShutdownTimer <= 0.0f) {
+                    exit(0);
+                }
+            }
+
             if (Globals::netDriver && Globals::timeTillStartupMassacre > 0.0f) {
                 bool tickTheDoomTimer = true;
 
@@ -288,6 +296,17 @@ namespace Hooks {
         }
         */
 
+        static UFunction* matchEndedUFunction = nullptr;
+
+        if (!matchEndedUFunction)
+            matchEndedUFunction = UFunction::FindFunction("Function PoplarGame.PoplarGameInfo.MatchEnded.Timer");
+
+        if (function == matchEndedUFunction && Globals::ShutdownTimer == 0.0f) {
+            std::cout << "[GAME] Match ended, shutting down in 10sec!" << std::endl;
+            
+            Globals::ShutdownTimer = 10.0f;
+        }
+
         static UFunction* eventNotifyDisconnectUFunction = nullptr;
 
         if (!eventNotifyDisconnectUFunction)
@@ -426,13 +445,13 @@ namespace Hooks {
                             std::cout << "[GAME] Setting up mutations and helix for " << ppc->GetFullName() << std::endl;
                             Globals::ppcsWeSetupAugsFor.push_back(ppc);
 
+                            ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
                             for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
                                 if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef && mut->HelixLevel > ppc->TestPerk.ItemLevel) {
                                     ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef = (UPoplarAugDefinition*)Engine::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
                                 }
                             }
-
-                            ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
                         }
                     }
                     else if (!Globals::amServer) {
@@ -475,13 +494,13 @@ namespace Hooks {
                             if (!alreadySetup) {
                                 std::cout << "[GAME] Running Local Mutation Setup" << std::endl;
 
+                                ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
                                 for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
                                     if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef && Metagame::GetCharacterFromName(Globals::selectedCharacter).level >= mut->HelixLevel) {
                                         ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef = (UPoplarAugDefinition*)Engine::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
                                     }
                                 }
-
-                                ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
 
                                 if (Globals::GearSlotOne) {
 

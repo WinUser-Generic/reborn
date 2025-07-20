@@ -22,7 +22,13 @@ namespace GameCoordinator {
             ServerConnectString = inJson["serverConnectString"];
             MatchStarted = inJson["matchStarted"];
         }
+
+        ServerBrowserEntry() {
+
+        }
     };
 
     void RefreshServerBrowser();
+
+    void RefreshWaitingForPlayers();
 }

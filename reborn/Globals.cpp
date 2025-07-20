@@ -53,6 +53,8 @@ namespace Globals {
 
     float timeTillMutationInit = 0.0f;
 
+    float ShutdownTimer = 0.0f;
+
     std::vector<Metagame::SaveFile> saveFiles = std::vector<Metagame::SaveFile>();
 
     unsigned int CurrentSaveFile = 0;
@@ -74,6 +76,14 @@ namespace Globals {
     ELaunchSequenceState LaunchSequenceState = ELaunchSequenceState::NotOpen;
 
     const wchar_t* LaunchCommand = nullptr;
+
+    unsigned int MatchIndex = 0;
+
+    bool ConnectedToGameCoordinatorMatch = false;
+
+    bool DisplayWaitingForPlayers = false;
+
+    GameCoordinator::ServerBrowserEntry CurrentMatchEntry = GameCoordinator::ServerBrowserEntry();
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);

@@ -63,6 +63,8 @@ namespace Globals {
 
     extern float timeTillMutationInit;
 
+    extern float ShutdownTimer;
+
     extern std::vector<Metagame::SaveFile> saveFiles;
 
     extern unsigned int CurrentSaveFile;
@@ -90,6 +92,14 @@ namespace Globals {
     extern ELaunchSequenceState LaunchSequenceState;
 
     extern const wchar_t* LaunchCommand;
+
+    extern unsigned int MatchIndex; // TODO: this is horrifying, but we don't have a match ID yet on our objects so here it is
+
+    extern bool ConnectedToGameCoordinatorMatch;
+    
+    extern bool DisplayWaitingForPlayers;
+
+    extern GameCoordinator::ServerBrowserEntry CurrentMatchEntry;
 
     UWorld* GetGWorld();
 

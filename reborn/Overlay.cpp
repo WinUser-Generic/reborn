@@ -51,7 +51,69 @@ namespace Overlay {
         return "No Item";
     }
 
+    void UpdateWaitingForPlayers() {
+        bool shouldExit = false;
+
+        while (!shouldExit && !Globals::SaveManagerOpen) {
+            GameCoordinator::RefreshWaitingForPlayers();
+
+            if (Globals::CurrentMatchEntry.MatchStarted) {
+                shouldExit = true;
+                Globals::DisplayWaitingForPlayers = false;
+            }
+            else {
+                Globals::DisplayWaitingForPlayers = true;
+            }
+
+            Sleep(5 * 1000);
+        }
+    }
+
     void Render() {
+        if (Globals::DisplayWaitingForPlayers) {
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.25f, ImGui::GetIO().DisplaySize.y * 0.25f), ImGuiCond_Always);
+
+            ImGui::Begin("Waiting For Players", &Globals::DisplayWaitingForPlayers, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            std::string waitingString = "";
+
+            if (Globals::CurrentMatchEntry.CurrentNumPlayers == Globals::CurrentMatchEntry.MaxNumPlayers) {
+                waitingString += "All Players Connected!";
+            }
+            else if (Globals::CurrentMatchEntry.CurrentNumPlayers > Globals::CurrentMatchEntry.MaxNumPlayers) {
+                waitingString += "You're in for a good one!";
+            }
+            else {
+                waitingString += "Waiting For Players (";
+                waitingString += std::to_string(Globals::CurrentMatchEntry.CurrentNumPlayers);
+                waitingString += "/";
+                waitingString += std::to_string(Globals::CurrentMatchEntry.MaxNumPlayers);
+                waitingString += ")...";
+            }
+
+            ImVec2 textSize;
+            textSize = ImGui::CalcTextSize(waitingString.c_str());
+
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+
+            float centerX = (windowWidth - textSize.x) * 0.5f;
+
+            float windowHeight = ImGui::GetContentRegionAvail().y;
+
+            float centerY = (windowHeight - textSize.y) * 0.5f;
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
+
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + centerY);
+
+            ImGui::Text(waitingString.c_str());
+
+            ImGui::End();
+        }
+
         if (Globals::ServerBrowserOpen) {
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
@@ -148,6 +210,9 @@ namespace Overlay {
                         Globals::amStandalone = false;
                         Globals::ServerBrowserOpen = false;
 
+                        Globals::MatchIndex = i;
+                        Globals::ConnectedToGameCoordinatorMatch = true;
+
                         std::wstring wLaunchCommand = std::wstring(server.ServerConnectString.begin(), server.ServerConnectString.end());
 
                         StartLaunchSequence(wcsdup(wLaunchCommand.c_str()));
@@ -205,6 +270,8 @@ namespace Overlay {
                     std::wstring wcmd = L"open ";
 
                     Globals::amStandalone = false;
+
+                    Globals::ConnectedToGameCoordinatorMatch = false;
 
                     StartLaunchSequence(wcsdup((wcmd.append(wIp).c_str())));
 
@@ -389,6 +456,13 @@ namespace Overlay {
                     Globals::LaunchSequenceState = Globals::ELaunchSequenceState::NotOpen;
                     std::cout << "[GAME] Entering the match!" << std::endl;
                     Engine::ExecConsoleCommand(Globals::LaunchCommand);
+
+                    if (!Globals::amStandalone && Globals::ConnectedToGameCoordinatorMatch) {
+                        Globals::ConnectedToGameCoordinatorMatch = false;
+
+                        std::thread t(UpdateWaitingForPlayers);
+                        t.detach();
+                    }
                 }
             }
             else {
