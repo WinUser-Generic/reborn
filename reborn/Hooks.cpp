@@ -162,11 +162,12 @@ namespace Hooks {
 
                     std::cout << "[GAME] Committing startup massacre to sync everyone up!" << std::endl;
                     for (UNetConnection* Connection : Globals::connections) {
-                        if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn)
-                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
-
                         if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
-                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
+                            Hooks::DestroyActorHook(Globals::GetGWorld(), ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn, true);
+                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->bStatic = false;
+                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->bNoDelete = false;
+                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Destroy();
+                            ((APoplarPlayerController*)Connection->Actor)->ServerRestartPlayer();
                         }
                     }
                 }

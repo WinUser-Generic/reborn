@@ -5,7 +5,7 @@ namespace ServerSettings {
 
     float tickrate = 30.0f;
 
-    unsigned int NumPlayersToStart = 2;
+    unsigned int NumPlayersToStart = 4;
 
     unsigned int TeamMinSizeForStart = 0;
 
