@@ -441,31 +441,33 @@ namespace Overlay {
                     DisplaySkin = Globals::CharacterSkin->skinDisplayName;
                 }
 
-                ImGui::PushID("SkinSelect");
+                if (Globals::amStandalone) {
+                    ImGui::PushID("SkinSelect");
 
-                if (ImGui::BeginCombo("Character Skin", DisplaySkin.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
-                    static std::string skinFilter = "";
+                    if (ImGui::BeginCombo("Character Skin", DisplaySkin.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                        static std::string skinFilter = "";
 
-                    ImGui::InputText("Filter Skins", &skinFilter);
+                        ImGui::InputText("Filter Skins", &skinFilter);
 
-                    if (ImGui::Selectable("Default Skin", Globals::CharacterSkin == nullptr)) {
-                        Globals::CharacterSkin = nullptr;
-                    }
+                        if (ImGui::Selectable("Default Skin", Globals::CharacterSkin == nullptr)) {
+                            Globals::CharacterSkin = nullptr;
+                        }
 
-                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characterSkins.size(); i++) {
-                        Metagame::CharacterSkin& skin = Globals::saveFiles[Globals::CurrentSaveFile].characterSkins[i];
+                        for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characterSkins.size(); i++) {
+                            Metagame::CharacterSkin& skin = Globals::saveFiles[Globals::CurrentSaveFile].characterSkins[i];
 
-                        if ((skinFilter.empty() || skin.skinDisplayName.contains(skinFilter)) && skin.characterName.contains(Globals::selectedCharacter)) {
-                            if (ImGui::Selectable(skin.skinDisplayName.c_str(), Globals::CharacterSkin == &skin)) {
-                                Globals::CharacterSkin = &skin;
+                            if ((skinFilter.empty() || skin.skinDisplayName.contains(skinFilter)) && skin.characterName.contains(Globals::selectedCharacter)) {
+                                if (ImGui::Selectable(skin.skinDisplayName.c_str(), Globals::CharacterSkin == &skin)) {
+                                    Globals::CharacterSkin = &skin;
+                                }
                             }
                         }
+
+                        ImGui::EndCombo();
                     }
 
-                    ImGui::EndCombo();
+                    ImGui::PopID();
                 }
-
-                ImGui::PopID();
 
                 /*
                 static std::string DisplayTaunt = "Default Taunt";
