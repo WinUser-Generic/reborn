@@ -171,15 +171,21 @@ namespace Hooks {
                     Globals::hasStartupMassacreHappened = true;
 
                     std::cout << "[GAME] Committing startup massacre to sync everyone up!" << std::endl;
+                    int numPlayersRestarted = 0;
+
                     for (UNetConnection* Connection : Globals::connections) {
                         if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
+                            numPlayersRestarted++;
                             Hooks::DestroyActorHook(Globals::GetGWorld(), ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn, true);
                             ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->bStatic = false;
                             ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->bNoDelete = false;
                             ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Destroy();
                             ((APoplarPlayerController*)Connection->Actor)->ServerRestartPlayer();
+                            //((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
                         }
                     }
+
+                    std::cout << "[DEBUG] Restarted " << numPlayersRestarted << " players" << std::endl;
                 }
             }
 
@@ -229,7 +235,7 @@ namespace Hooks {
                         SDKUtils::GetLastOfClass<AGameInfo>()->eventPostLogin(pc);
                     }
 
-                    Globals::timeTillStartupMassacre = 5.0f;
+                    Globals::timeTillStartupMassacre = 15.0f;
                 }
             }
 
