@@ -64,6 +64,8 @@ namespace Globals {
     extern float timeTillMutationInit;
 
     extern float ShutdownTimer;
+    
+    extern bool CreateGameOpen;
 
     extern std::vector<Metagame::SaveFile> saveFiles;
 

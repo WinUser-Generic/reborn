@@ -49,6 +49,8 @@ namespace Globals {
 
     bool ServerBrowserOpen = false;
 
+    bool CreateGameOpen = false;
+
     bool didStandaloneCharacterInitialization = false;
 
     float timeTillMutationInit = 0.0f;

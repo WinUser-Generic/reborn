@@ -72,6 +72,60 @@ namespace Overlay {
     }
 
     void Render() {
+        if (Globals::CreateGameOpen) {
+            //std::string InstanceName, std::string HumanReadableInstanceMapMode, std::string ServerStartupCommand, int MaxNumPlayers, std::string Password
+            
+            static std::string InstanceName = "";
+
+            static std::pair<std::string, std::string> MapMode = std::make_pair("Supercharge - Ziggurat", "open Wishbone_P");
+
+            static int MaxNumPlayers = 1;
+
+            static std::string Password = "";
+
+            ImGui::Begin("Create a Match", &Globals::CreateGameOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            ImGui::InputText("Instance name", &InstanceName);
+
+            ImGui::PushID("MapMode");
+
+            static std::string mapModeDisplay = "Supercharge - Ziggurat";
+
+            mapModeDisplay = MapMode.first;
+
+            if (ImGui::BeginCombo("Map/Mode Selection", mapModeDisplay.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                static std::string displayOneFilter = "";
+
+                ImGui::InputText("Filter Maps/Modes", &displayOneFilter);
+
+                for (int i = 0; i < Constants::GameCreationOptions.size(); i++) {
+                    auto& cmpMapMode = Constants::GameCreationOptions[i];
+
+                    if (displayOneFilter.empty() || cmpMapMode.first.contains(displayOneFilter)) {
+                        if (ImGui::Selectable(cmpMapMode.first.c_str(), MapMode == cmpMapMode)) {
+                            MapMode = cmpMapMode;
+                        }
+                    }
+                }
+
+                ImGui::EndCombo();
+            }
+
+            ImGui::PopID();
+
+            ImGui::SliderInt("Required Players to Start", &MaxNumPlayers, 1, 15);
+
+            ImGui::InputText("RCON Password", &Password);
+
+            if (ImGui::Button("Create Game!", ImVec2(-1.0f, 0))) {
+                Globals::CreateGameOpen = false;
+                GameCoordinator::CreateGame(InstanceName, MapMode.first, MapMode.second, MaxNumPlayers, Password);
+            }
+            ImGui::End();
+        }
+
         if (Globals::DisplayWaitingForPlayers) {
             ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.25f, ImGui::GetIO().DisplaySize.y * 0.25f), ImGuiCond_Always);
@@ -139,7 +193,8 @@ namespace Overlay {
             float buttonWidth = (availWidth - spacing) * 0.25f;
 
             if (ImGui::Button("RCON Admin", ImVec2(buttonWidth, 0))) {
-
+                Globals::ServerBrowserOpen = false;
+                Globals::CreateGameOpen = true;
             }
 
             ImGui::SameLine();

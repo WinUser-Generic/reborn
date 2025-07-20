@@ -130,6 +130,96 @@ namespace Constants {
         }
     };
 
+    const std::vector<std::pair<std::string, std::string>> GameCreationOptions = {
+        {
+            "Story - Prologue", "open PvE_Prologue_P"
+        },
+        {
+            "Story - The Algorithm", "open Caverns_P"
+        },
+        {
+            "Story - Void's Edge", "open Portal_P"
+        },
+        {
+            "Story - The Renegade", "open Captains_P"
+        },
+        {
+            "Story - The Archive", "open Evacuation_P"
+        },
+        {
+            "Story - Sentinel", "open Ruins_P"
+        },
+        {
+            "Story - The Experiment", "open Observatory_p"
+        },
+        {
+            "Story - The Saboteur", "open Refinery_P"
+        },
+        {
+            "Story - Heliophage", "open Cathedral_P"
+        },
+        {
+            "Operations - Attikus and the Thrall Rebellion", "open Slums_P"
+        },
+        {
+            "Operations - Toby's Friendship Raid", "open Toby_Raid_P"
+        },
+        {
+            "Operations - Oscar Mike vs the Battleschool", "open CullingFacility_P"
+        },
+        {
+            "Operations - Montana and the Demon Bear", "open TallTales_P"
+        },
+        {
+            "Operations - Phoebe and the Heart of Ekkunar", "open Heart_Ekkunar_P"
+        },
+        {
+            "Supercharge - Ziggurat", "open Wishbone_P"
+        },
+        {
+            "Supercharge - Horizon", "open Ripple_P"
+        },
+        {
+            "Supercharge - Permafrost", "open Cascade_P"
+        },
+        {
+            "Incursion - Echelon", "open Viaduct_P"
+        },
+        {
+            "Incursion - Monuments", "open Snowdrift_P"
+        },
+        {
+            "Incursion - Overgrowth", "open Inc_Stronghold2_P"
+        },
+        {
+             "Capture - Outback", "open Ravine_P"
+        },
+        {
+            "Capture - Snowblind", "open Snowblind_P"
+        },
+        {
+            "Capture - Temples", "open BlissRuins_P"
+        },
+        {
+            "Meltdown - Outskirts", "open SlumScort_P"
+        },
+        {
+            "Meltdown - Paradise", "open Skirmish_P"
+        },
+        {
+            "Meltdown - Coldsnap", "open IceScort_P"
+        },
+        {
+            "Face-Off - Snowblind", "open Snowblind_Headhunter_P"
+        },
+        {
+            "Face-Off - Outback", "open Ravine_Headhunter_P"
+        },
+        {
+            "Face-Off - Temples", "open BlissRuins_Headhunter_P"
+        }
+    };
+
     namespace PvAIMaps {
         const std::vector<std::pair<std::string, const wchar_t*>> Supercharge = {
             {

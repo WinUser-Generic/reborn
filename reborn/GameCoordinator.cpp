@@ -4,6 +4,30 @@
 #include "Constants.hpp"
 
 namespace GameCoordinator {
+    void CreateGame(std::string InstanceName, std::string HumanReadableInstanceMapMode, std::string ServerStartupCommand, int MaxNumPlayers, std::string Password) {
+        httplib::Result result;
+
+        if (!Globals::GameCoordinatorHttpClient.get()) {
+            Globals::GameCoordinatorHttpClient = std::make_shared<httplib::Client>(Constants::GameCoordinatorEndpoint);
+        }
+
+        nlohmann::json jsonObj = nlohmann::json();
+
+        jsonObj["InstanceName"] = InstanceName;
+        jsonObj["HumanReadableInstanceMapMode"] = HumanReadableInstanceMapMode;
+        jsonObj["ServerStartupCommand"] = ServerStartupCommand;
+        jsonObj["MaxNumPlayers"] = MaxNumPlayers;
+
+        std::string bearer = "Bearer ";
+        bearer += Password;
+
+        httplib::Headers headers = {
+            {"Authorization", bearer.c_str()}
+        };
+
+        Globals::GameCoordinatorHttpClient.get()->Post("/api/games", headers, jsonObj.dump(), "application/json");
+    }
+
     void RefreshServerBrowser() {
         httplib::Result result;
 
