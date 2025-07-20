@@ -692,17 +692,19 @@ namespace Overlay {
 
         if (Globals::NewSaveOpen) {
             static std::string saveName = "";
-            static bool startWithEverything = false;
+            static bool startWithEverything = true;
 
             ImGui::Begin("New Save", &Globals::NewSaveOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
             ImGui::SetWindowFontScale(2.0f);
 
             ImGui::InputText("Display Name (Visible in Multiplayer & Singleplayer)", &saveName);
+            /*
             if (ImGui::RadioButton("Earn Gear, Mutations & Character Skins by Playing!", !startWithEverything)) {
                 startWithEverything = false;
             }
             ImGui::SameLine();
+            */
             if (ImGui::RadioButton("Start With Everything!", startWithEverything)) {
                 startWithEverything = true;
             }
