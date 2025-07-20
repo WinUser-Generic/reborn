@@ -176,11 +176,18 @@ namespace Hooks {
                     for (UNetConnection* Connection : Globals::connections) {
                         if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
                             numPlayersRestarted++;
+                            FVector loc = ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Location;
                             Hooks::DestroyActorHook(Globals::GetGWorld(), ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn, true);
                             ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->bStatic = false;
                             ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->bNoDelete = false;
                             ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Destroy();
                             ((APoplarPlayerController*)Connection->Actor)->ServerRestartPlayer();
+                            if (((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
+                                ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->SetLocation(loc);
+                            }
+                            else {
+                                std::cout << "[GAME] Error: Didn't get pawn after ServerRestartPlayer" << std::endl;
+                            }
                             //((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
                         }
                     }

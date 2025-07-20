@@ -129,7 +129,7 @@ namespace ServerNetworking {
 
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
-        std::sort(actors.begin(), actors.end(), CompareActorPriority);
+        //std::sort(actors.begin(), actors.end(), CompareActorPriority);
 
         for (UNetConnection* connection : Globals::connections) {
             if (!connection)

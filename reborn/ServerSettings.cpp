@@ -9,7 +9,7 @@ namespace ServerSettings {
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Dojo_P";
+    const wchar_t* MapString = L"open Portal_P";
 
     bool amRunningWithGameCoordinator = false;
 
