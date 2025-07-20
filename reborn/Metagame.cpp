@@ -47,11 +47,13 @@ namespace Metagame {
         for (int i = 0; i < file.characterSkins.size(); i++) {
             jsonObj["characterSkins"][i]["skinDisplayName"] = file.characterSkins[i].skinDisplayName;
             jsonObj["characterSkins"][i]["skinObjectName"] = file.characterSkins[i].skinObjectName;
+            jsonObj["characterSkins"][i]["characterName"] = file.characterSkins[i].characterName;
         }
 
         for (int i = 0; i < file.characterTaunts.size(); i++) {
             jsonObj["characterTaunts"][i]["tauntDisplayName"] = file.characterTaunts[i].tauntDisplayName;
             jsonObj["characterTaunts"][i]["tauntObjectName"] = file.characterTaunts[i].tauntObjectName;
+            jsonObj["characterTaunts"][i]["characterName"] = file.characterTaunts[i].characterName;
         }
 
         for (int i = 0; i < file.loadouts.size(); i++) {
@@ -105,6 +107,9 @@ namespace Metagame {
                 CharacterSkin skin;
                 skin.skinDisplayName = skinJson["skinDisplayName"];
                 skin.skinObjectName = skinJson["skinObjectName"];
+                if (skinJson.contains("characterName")) {
+                    skin.characterName = skinJson["characterName"];
+                }
                 saveFile.characterSkins.push_back(skin);
             }
         }
@@ -114,6 +119,9 @@ namespace Metagame {
                 CharacterTaunt taunt;
                 taunt.tauntDisplayName = tauntJson["tauntDisplayName"];
                 taunt.tauntObjectName = tauntJson["tauntObjectName"];
+                if (tauntJson.contains("characterName")) {
+                    taunt.characterName = tauntJson["characterName"];
+                }
                 saveFile.characterTaunts.push_back(taunt);
             }
         }

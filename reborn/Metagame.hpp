@@ -96,30 +96,36 @@ namespace Metagame {
     struct CharacterSkin {
         std::string skinDisplayName;
         std::string skinObjectName;
+        std::string characterName;
 
         CharacterSkin(UPoplarMetaSkinDefinition* skinDef) {
             skinDisplayName = skinDef->ItemName.ToString();
             skinObjectName = skinDef->GetFullName();
+            characterName = skinDef->CharacterNameId->CharacterClassId->ClassName.ToString();
         }
 
         CharacterSkin() {
             skinDisplayName = "";
             skinObjectName = "";
+            characterName = "";
         }
     };
 
     struct CharacterTaunt {
         std::string tauntDisplayName;
         std::string tauntObjectName;
+        std::string characterName;
 
         CharacterTaunt(UPoplarMetaTauntDefinition* MetaTauntDefinition) {
             tauntDisplayName = MetaTauntDefinition->ItemName.ToString();
             tauntObjectName = MetaTauntDefinition->GetFullName();
+            characterName = MetaTauntDefinition->CharDef->Character->CharacterClassId->ClassName.ToString();
         }
 
         CharacterTaunt() {
             tauntDisplayName = "";
             tauntObjectName = "";
+            characterName = "";
         }
     };
 

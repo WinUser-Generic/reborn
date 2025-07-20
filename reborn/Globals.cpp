@@ -67,6 +67,9 @@ namespace Globals {
     Metagame::Item* GearSlotTwo = nullptr;
     Metagame::Item* GearSlotThree = nullptr;
 
+    Metagame::CharacterSkin* CharacterSkin = nullptr;
+    Metagame::CharacterTaunt* CharacterTaunt = nullptr;
+
     float timeSinceGameControllerServerPoll = 0.0f;
 
     std::shared_ptr<httplib::Client> GameCoordinatorHttpClient;

@@ -77,6 +77,9 @@ namespace Globals {
     extern Metagame::Item* GearSlotTwo;
     extern Metagame::Item* GearSlotThree;
 
+    extern Metagame::CharacterSkin* CharacterSkin;
+    extern Metagame::CharacterTaunt* CharacterTaunt;
+
     extern float timeSinceGameControllerServerPoll;
 
     extern std::shared_ptr<httplib::Client> GameCoordinatorHttpClient;

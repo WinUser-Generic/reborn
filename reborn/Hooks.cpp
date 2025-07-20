@@ -407,9 +407,24 @@ namespace Hooks {
 
                     UPoplarPlayerNameIdentifierDefinition* nameIdDef = UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>(Metagame::GetCharacterObjectNameFromName(Globals::selectedCharacter));
 
-                    ProcessEvent.call(object, function, params);
+                    //ProcessEvent.call(object, function, params);
 
                     ppc->eventSwitchPoplarPlayerClass(nameIdDef);
+
+                    UPoplarMetaSkinDefinition* skin = nullptr;
+
+                    if (Globals::CharacterSkin) {
+                        skin = UObject::FindObject<UPoplarMetaSkinDefinition>(Globals::CharacterSkin->skinObjectName);
+                        
+                    }
+
+                    UPoplarMetaTauntDefinition* taunt = nullptr;
+
+                    if (Globals::CharacterTaunt) {
+                        taunt = UObject::FindObject<UPoplarMetaTauntDefinition>(Globals::CharacterTaunt->tauntObjectName);
+                    }
+
+                    ppc->ClientApplyPendingPlayerClass(nameIdDef, skin, taunt);
 
                     Globals::timeTillMutationInit = 5.0f;
 

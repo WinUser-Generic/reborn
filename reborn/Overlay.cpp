@@ -23,6 +23,8 @@ namespace Overlay {
         Globals::GearSlotOne = nullptr;
         Globals::GearSlotTwo = nullptr;
         Globals::GearSlotThree = nullptr;
+        Globals::CharacterSkin = nullptr;
+        Globals::CharacterTaunt = nullptr;
         Globals::LaunchCommand = command;
     }
 
@@ -294,7 +296,7 @@ namespace Overlay {
                 textSize = ImGui::CalcTextSize("Select a Character");
             }
             else if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
-                textSize = ImGui::CalcTextSize("Select your Gear");
+                textSize = ImGui::CalcTextSize("Select your Gear & Cosmetics");
             }
 
             float windowWidth = ImGui::GetContentRegionAvail().x;
@@ -307,7 +309,7 @@ namespace Overlay {
                 ImGui::Text("Select a Character");
             }
             else if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
-                ImGui::Text("Select your Gear");
+                ImGui::Text("Select your Gear & Cosmetics");
             }
 
             if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
@@ -432,6 +434,72 @@ namespace Overlay {
                 }
 
                 ImGui::PopID();
+
+                static std::string DisplaySkin = "Default Skin";
+
+                if (Globals::CharacterSkin) {
+                    DisplaySkin = Globals::CharacterSkin->skinDisplayName;
+                }
+
+                ImGui::PushID("SkinSelect");
+
+                if (ImGui::BeginCombo("Character Skin", DisplaySkin.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                    static std::string skinFilter = "";
+
+                    ImGui::InputText("Filter Skins", &skinFilter);
+
+                    if (ImGui::Selectable("Default Skin", Globals::CharacterSkin == nullptr)) {
+                        Globals::CharacterSkin = nullptr;
+                    }
+
+                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characterSkins.size(); i++) {
+                        Metagame::CharacterSkin& skin = Globals::saveFiles[Globals::CurrentSaveFile].characterSkins[i];
+
+                        if ((skinFilter.empty() || skin.skinDisplayName.contains(skinFilter)) && skin.characterName.contains(Globals::selectedCharacter)) {
+                            if (ImGui::Selectable(skin.skinDisplayName.c_str(), Globals::CharacterSkin == &skin)) {
+                                Globals::CharacterSkin = &skin;
+                            }
+                        }
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::PopID();
+
+                /*
+                static std::string DisplayTaunt = "Default Taunt";
+
+                if (Globals::CharacterTaunt) {
+                    DisplayTaunt = Globals::CharacterTaunt->tauntDisplayName;
+                }
+
+                ImGui::PushID("TauntSelect");
+
+                if (ImGui::BeginCombo("Character Taunt", DisplayTaunt.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                    static std::string tauntFilter = "";
+
+                    ImGui::InputText("Filter Taunts", &tauntFilter);
+
+                    if (ImGui::Selectable("Default Taunt", Globals::CharacterTaunt == nullptr)) {
+                        Globals::CharacterTaunt = nullptr;
+                    }
+
+                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characterTaunts.size(); i++) {
+                        Metagame::CharacterTaunt& taunt = Globals::saveFiles[Globals::CurrentSaveFile].characterTaunts[i];
+
+                        if ((tauntFilter.empty() || taunt.tauntDisplayName.contains(tauntFilter)) && taunt.characterName.contains(Globals::selectedCharacter)) {
+                            if (ImGui::Selectable(taunt.tauntDisplayName.c_str(), Globals::CharacterTaunt == &taunt)) {
+                                Globals::CharacterTaunt = &taunt;
+                            }
+                        }
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::PopID();
+                */
             }
 
             float availWidth = ImGui::GetContentRegionAvail().x;
