@@ -252,7 +252,7 @@ namespace Hooks {
     void StartupCompletedHook() {
         std::cout << "[GAME] Startup Complete!" << std::endl;
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
-        if (!SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue) {
+        if (!SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue || !SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedVersusPrologue) {
             SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue = true;
             SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedVersusPrologue = true;
             SDKUtils::GetLastOfClass<UWillowProfile>()->bDirty = true;
