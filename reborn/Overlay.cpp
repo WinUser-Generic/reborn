@@ -65,7 +65,7 @@ namespace Overlay {
                 Globals::DisplayWaitingForPlayers = true;
             }
 
-            Sleep(5 * 1000);
+            Sleep(2 * 1000);
         }
     }
 
