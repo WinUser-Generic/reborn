@@ -109,4 +109,14 @@ namespace Globals {
     UWorld* GetGWorld();
 
     void OnWorldSwitch();
+
+    namespace Telemetry {
+        extern std::mutex TickrateMutex;
+
+        extern std::vector<float> Tickrates;
+
+        extern std::mutex ReplicationFNameMutex;
+
+        extern std::vector<int> ReplicationFNames;
+    }
 }

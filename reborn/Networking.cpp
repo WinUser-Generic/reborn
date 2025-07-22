@@ -1,6 +1,21 @@
 #include "Networking.hpp"
 
+#include <psapi.h>
+
 namespace ServerNetworking {
+    std::string GetDateTimeISO() {
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now.time_since_epoch()) % 1000;
+
+        std::stringstream ss;
+        ss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+        ss << '.' << std::setfill('0') << std::setw(3) << ms.count() << 'Z';
+
+        return ss.str();
+    }
+
     void GameControllerPoll() {
         nlohmann::json jsonBody = nlohmann::json();
 
@@ -8,6 +23,53 @@ namespace ServerNetworking {
         jsonBody["HumansHaveStarted"] = Globals::haveHumansStarted;
 
         Globals::GameCoordinatorHttpClient.get()->Post("/api/games/server-poll", jsonBody.dump(), "application/json");
+
+        nlohmann::json telemetrySnapshotPoll = nlohmann::json();
+
+        telemetrySnapshotPoll["Timestamp"] = GetDateTimeISO();
+
+        telemetrySnapshotPoll["MatchGUID"] = ServerSettings::GameCoordinatorKey;
+
+        telemetrySnapshotPoll["TargetTickrate"] = ServerSettings::tickrate;
+
+        float averageTickrate = 0.0f;
+
+        {
+            std::scoped_lock t(Globals::Telemetry::TickrateMutex);
+
+            float sum = std::accumulate(Globals::Telemetry::Tickrates.begin(), Globals::Telemetry::Tickrates.end(), 0.0f);
+
+            averageTickrate = sum / Globals::Telemetry::Tickrates.size();
+
+            Globals::Telemetry::Tickrates.clear();
+        }
+
+        telemetrySnapshotPoll["EffectiveTickrate"] = averageTickrate;
+
+        {
+            std::scoped_lock t(Globals::Telemetry::ReplicationFNameMutex);
+            telemetrySnapshotPoll["ReplicationFNames"] = Globals::Telemetry::ReplicationFNames;
+        }
+
+        telemetrySnapshotPoll["PlayersConnected"] = Globals::connections.size();
+
+        telemetrySnapshotPoll["MaxPlayers"] = ServerSettings::NumPlayersToStart;
+
+        PROCESS_MEMORY_COUNTERS_EX pmc;
+
+        GetProcessMemoryInfo(GetCurrentProcess(),
+            (PROCESS_MEMORY_COUNTERS*)&pmc,
+            sizeof(pmc));
+
+        telemetrySnapshotPoll["MemoryUsageMB"] = (int)(pmc.WorkingSetSize / (1024.0 * 1024.0));
+
+        Globals::GameCoordinatorHttpClient.get()->Post("/api/telemetry/snapshot", telemetrySnapshotPoll.dump(), "application/json");
+
+        {
+            std::scoped_lock t(Globals::Telemetry::ReplicationFNameMutex);
+
+            Globals::Telemetry::ReplicationFNames.clear();
+        }
     }
 
     void InitListen() {
@@ -221,6 +283,12 @@ namespace ServerNetworking {
 
                 if (channel && channel->Actor && !(actor->ObjectFlags & 0x2000000000000000) && (*reinterpret_cast<bool(**)(UNetConnection*, bool)>(*(__int64*)connection + 0x260))(connection, 1) && channel->NumOutRec < 0xFE) {
                     //printf("[NETWORKING] Replication time!\n");
+                    {
+                        std::scoped_lock t(Globals::Telemetry::ReplicationFNameMutex);
+                    
+                        Globals::Telemetry::ReplicationFNames.push_back(channel->Actor->Class->Name.FNameEntryId);
+                    }
+
                     reinterpret_cast<void (*)(UActorChannel * channel)>(Globals::baseAddress + 0x0613050)(channel);
                     if (channel->Actor) {
                         channel->Actor->NetTag++;

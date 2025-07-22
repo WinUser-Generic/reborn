@@ -1,5 +1,89 @@
+using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Numerics;
+
 namespace gamecontroller
 {
+    public class TelemetryContext : DbContext
+    {
+        public DbSet<TelemetryMatchLogs> Logs { get; set; }
+
+		public string DbPath { get; }
+
+		public TelemetryContext()
+		{
+			DbPath = "telemetry.db";
+		}
+
+		protected override void OnConfiguring(DbContextOptionsBuilder options)
+			=> options.UseSqlite($"Data Source={DbPath}");
+	}
+
+    public class TelemetryMatchLogs
+    {
+        [Key]
+        public string MatchGUID { get; set; }
+
+        public List<TelemetryEvent> TelemetryEvents { get; set; }
+        public List<TelemetrySnapshot> TelemetrySnapshots { get; set; }
+
+        public TelemetryMatchLogs(string matchGUID, TelemetryEvent seedEvent)
+        {
+            MatchGUID = matchGUID;
+            TelemetryEvents = new List<TelemetryEvent>();
+            TelemetrySnapshots = new List<TelemetrySnapshot>();
+            TelemetryEvents.Add(seedEvent);
+        }
+
+		public TelemetryMatchLogs(string matchGUID, TelemetrySnapshot seedSnapshot)
+		{
+			MatchGUID = matchGUID;
+			TelemetryEvents = new List<TelemetryEvent>();
+			TelemetrySnapshots = new List<TelemetrySnapshot>();
+			TelemetrySnapshots.Add(seedSnapshot);
+		}
+
+        public TelemetryMatchLogs()
+        {
+            MatchGUID = "";
+            TelemetryEvents = new List<TelemetryEvent>();
+            TelemetrySnapshots = new List<TelemetrySnapshot>();
+        }
+	}
+
+    public class TelemetryEvent
+    {
+        [Key]
+		public DateTime Timestamp { get; set; }
+
+		public required string MatchGUID { get; set; }
+
+		public required string EventName { get; set; }
+
+        public bool IsError { get; set; }
+    }
+
+    public class TelemetrySnapshot
+    {
+        [Key]
+        public DateTime Timestamp { get; set; }
+
+		public required string MatchGUID { get; set; }
+
+		public float TargetTickrate { get; set; }
+
+        public float EffectiveTickrate { get; set; }
+
+        public required List<int> ReplicationFNames { get; set; }
+
+        public int PlayersConnected { get; set; }
+
+        public int MaxPlayers { get; set; }
+
+        public int MemoryUsageMB { get; set; }
+    }
+
     public class ServerPollUpdate
     {
 		public int ConnectedPlayers { get; set; }

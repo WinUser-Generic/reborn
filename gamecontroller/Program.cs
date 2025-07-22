@@ -8,6 +8,8 @@ builder.Services.AddControllers();
 
 builder.Services.AddSingleton<GameSessions>();
 
+builder.Services.AddSingleton<DatabaseSessions>();
+
 builder.Services.AddHostedService<SessionCleanupService>();
 
 var app = builder.Build();

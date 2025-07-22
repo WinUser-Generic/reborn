@@ -104,4 +104,14 @@ namespace Globals {
         Globals::didStandaloneCharacterInitialization = false;
         Globals::didSendPreferencesToServer = false;
     }
+
+    namespace Telemetry {
+        std::mutex TickrateMutex = std::mutex();
+
+        std::vector<float> Tickrates = std::vector<float>();
+
+        std::mutex ReplicationFNameMutex = std::mutex();
+
+        std::vector<int> ReplicationFNames = std::vector<int>();
+    }
 }

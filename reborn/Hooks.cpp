@@ -254,6 +254,12 @@ namespace Hooks {
                 time += DeltaTime;
 
                 if (time > (1.0f / ServerSettings::tickrate)) {
+                    {
+                        std::scoped_lock t(Globals::Telemetry::TickrateMutex);
+
+                        Globals::Telemetry::Tickrates.push_back(1.0f / time);
+                    }
+
                     time = 0.0f;
 
                     ServerNetworking::TickNetServer(Globals::netDriver);
