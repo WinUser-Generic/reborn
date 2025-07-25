@@ -253,7 +253,7 @@ namespace Hooks {
 
                 time += DeltaTime;
 
-                if (time > (1.0f / ServerSettings::tickrate)) {
+                //if (time > (1.0f / ServerSettings::tickrate)) {
                     {
                         std::scoped_lock t(Globals::Telemetry::TickrateMutex);
 
@@ -263,7 +263,7 @@ namespace Hooks {
                     time = 0.0f;
 
                     ServerNetworking::TickNetServer(Globals::netDriver);
-                }
+                //}
             }
         }
     }
@@ -743,6 +743,47 @@ namespace Hooks {
 
     void JustDoNothingHook(void* a1, void* a2, void* a3) {
         return;
+    }
+
+    SafetyHookInline StaticConstructObject;
+
+    UObject* StaticConstructObjectHook(UClass* a1,
+        __int64 a2,
+        __int64 a3,
+        __int64 a4,
+        __int64 a5,
+        __int64 a6,
+        __int64 a7,
+        __int64 a8,
+        __int64 a9) {
+        UObject* ret = StaticConstructObject.call<UObject*>(a1, a2, a3, a4, a5, a6, a7, a8, a9);
+
+ 
+        if (Globals::netDriver && ret && ret->IsA<AActor>()) {
+                    std::scoped_lock t(Globals::NetworkObjectListMutex);
+
+                    Globals::NetworkObjectList.push_back((AActor*)ret);
+        }
+
+        return ret;
+    }
+
+    SafetyHookInline BeginDestroy;
+
+    bool BeginDestroyHook(UObject* obj) {
+        if (Globals::netDriver && obj && obj->IsA<AActor>()) {
+            {
+                std::scoped_lock l(Globals::NetworkObjectListMutex);
+
+                Globals::NetworkObjectList.erase(std::remove_if(Globals::NetworkObjectList.begin(), Globals::NetworkObjectList.end(), [&obj](AActor* cmpActor) {
+                    return obj == cmpActor;
+                    }), Globals::NetworkObjectList.end());
+            }
+        }
+
+        bool ret = BeginDestroy.call<bool>(obj);
+
+        return ret;
     }
 
     SafetyHookInline PoplarGameInfoSetup;

@@ -30,6 +30,8 @@ namespace Init {
             Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
             Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
             Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
+            Hooks::StaticConstructObject = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8C050), &Hooks::StaticConstructObjectHook);
+            Hooks::BeginDestroy = safetyhook::create_inline((void*)(Globals::baseAddress + 0x74E80), &Hooks::BeginDestroyHook);
         }
         else {
             Hooks::MainMenu = safetyhook::create_inline((void*)(Globals::baseAddress + 0x127D860), &Hooks::MainMenuHook);

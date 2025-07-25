@@ -95,6 +95,12 @@ namespace ServerNetworking {
 
         NetDriver->NetConnectionClass = UTcpipConnection::StaticClass();
 
+        {
+            std::scoped_lock l(Globals::NetworkObjectListMutex);
+
+            Globals::NetworkObjectList = SDKUtils::GetAllOfClass<AActor>();
+        }
+
         Globals::netDriver = NetDriver;
 
         printf("[NETWORKING] Game networking listening on port %i!\n", ServerSettings::gamePort);
@@ -115,11 +121,16 @@ namespace ServerNetworking {
     }
 
     std::vector<AActor*> BuildConsiderList(AWorldInfo* WorldInfo, UNetDriver* NetDriver) {
-        std::vector<AActor*> considerListFirstPass = SDKUtils::GetAllOfClass<AActor>();
-
+        std::vector<AActor*> copiedNetworkObjectList;
         std::vector<AActor*> ret = std::vector<AActor*>();
 
-        for (AActor* actor : considerListFirstPass) {
+        {
+            std::scoped_lock l(Globals::NetworkObjectListMutex);
+
+            copiedNetworkObjectList = Globals::NetworkObjectList;
+        }
+
+        for (AActor* actor : copiedNetworkObjectList) {
             if (!actor || actor->RemoteRole == ENetRole::ROLE_None || !actor->WorldInfo || actor->bPendingDelete || actor->ObjectFlags & 0x2000000000000000 || actor->Class == AEmitter::StaticClass()) { //
                 continue;
             }
@@ -132,6 +143,8 @@ namespace ServerNetworking {
         }
 
         return ret;
+
+       
     }
 
     uint8_t GetConnectionState(UNetConnection* connection) {

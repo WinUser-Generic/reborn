@@ -110,6 +110,10 @@ namespace Globals {
 
     void OnWorldSwitch();
 
+    extern std::mutex NetworkObjectListMutex;
+    
+    extern std::vector<AActor*> NetworkObjectList;
+
     namespace Telemetry {
         extern std::mutex TickrateMutex;
 

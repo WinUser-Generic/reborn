@@ -101,6 +101,22 @@ namespace Hooks {
 
     extern SafetyHookInline Present;
 
+    extern SafetyHookInline StaticConstructObject;
+
+    extern SafetyHookInline BeginDestroy;
+
+    bool BeginDestroyHook(UObject* obj);
+
+    UObject* StaticConstructObjectHook(UClass* a1,
+        __int64 a2,
+        __int64 a3,
+        __int64 a4,
+        __int64 a5,
+        __int64 a6,
+        __int64 a7,
+        __int64 a8,
+        __int64 a9);
+
     LRESULT WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     HRESULT PresentHook(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);

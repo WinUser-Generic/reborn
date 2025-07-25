@@ -3,7 +3,7 @@
 namespace ServerSettings {
     int gamePort = 7777;
 
-    float tickrate = 30.0f;
+    float tickrate = 0.0f;
 
     unsigned int NumPlayersToStart = 2;
 
