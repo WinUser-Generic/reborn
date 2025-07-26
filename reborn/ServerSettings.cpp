@@ -5,11 +5,11 @@ namespace ServerSettings {
 
     float tickrate = 0.0f;
 
-    unsigned int NumPlayersToStart = 2;
+    unsigned int NumPlayersToStart = 1;
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Portal_P";
+    const wchar_t* MapString = L"open Wishbone_P?bTournamentMode=1";
 
     bool amRunningWithGameCoordinator = false;
 

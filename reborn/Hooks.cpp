@@ -278,6 +278,9 @@ namespace Hooks {
 
     void StartupCompletedHook() {
         std::cout << "[GAME] Startup Complete!" << std::endl;
+
+        Engine::ExecConsoleCommand(L"open 127.0.0.1");
+
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
         if (!SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue || !SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedVersusPrologue) {
             SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue = true;
@@ -314,6 +317,11 @@ namespace Hooks {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         }
         */
+
+        //eventReplicated
+        if (function->GetFullName().contains("Entitlements")) {
+            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        }
 
         static UFunction* matchEndedUFunction = nullptr;
 
