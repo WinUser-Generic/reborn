@@ -116,6 +116,8 @@ namespace Globals {
 
     extern bool CharacterSelectMenuOpen;
 
+    extern bool CharacterSelectHasLockedIn;
+
     namespace Telemetry {
         extern std::mutex TickrateMutex;
 

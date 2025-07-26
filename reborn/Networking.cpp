@@ -332,6 +332,7 @@ namespace ServerNetworking {
                 Globals::channelsToClose.pop_back();
 
                 if (ch && ch->Connection && ch->Actor) {
+                    reinterpret_cast<void (*)(UActorChannel* channel)>(Globals::baseAddress + 0x0613050)(ch);
                     (*(reinterpret_cast<void(**)(UActorChannel*)>(*(__int64*)ch + 0x210)))(ch);
                 }
             }

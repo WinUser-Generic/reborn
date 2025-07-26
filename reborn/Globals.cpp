@@ -96,6 +96,8 @@ namespace Globals {
 
     bool CharacterSelectMenuOpen = false;
 
+    bool CharacterSelectHasLockedIn = false;
+
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
     }
@@ -109,6 +111,7 @@ namespace Globals {
         Globals::timeTillStartupMassacre = 0.0f;
         Globals::didStandaloneCharacterInitialization = false;
         Globals::didSendPreferencesToServer = false;
+        Globals::CharacterSelectHasLockedIn = false;
 
         std::scoped_lock t(Globals::NetworkObjectListMutex);
 

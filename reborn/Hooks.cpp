@@ -819,7 +819,7 @@ namespace Hooks {
 
         int i = 0;
 
-        std::cout << "[Game] Launched World " << Globals::GetGWorld()->GetFullName() << "!" << std::endl;
+        std::cout << "[Game] Launched " << Globals::GetGWorld()->GetFullName() << "!" << std::endl;
 
         if (Globals::amServer && !Globals::GetGWorld()->GetFullName().contains("MenuMap")) {
             a1->NumPlayers = ServerSettings::NumPlayersToStart;

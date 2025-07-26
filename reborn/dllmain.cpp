@@ -32,25 +32,6 @@ void MainThread() {
     else {
         Init::ImGUI();
     }
-
-    // Everything below this point is debug slop that should never make it to source control.
-    // If you're reading this, I fucked up
-    if (!Globals::amServer){
-        while (true) {
-            if (GetAsyncKeyState(VK_F7)) {
-                SDKUtils::GetLastOfClass< UPoplarCharacterSelectGFxMovie>()->bMovieAndManagerReady = 1;
-
-                SDKUtils::GetLastOfClass<APoplarPlayerController>()->ServerCharacterSelectInput(29);
-                SDKUtils::GetLastOfClass<APoplarPlayerController>()->ServerSetHasReceivedEntitlements();
-                SDKUtils::GetLastOfClass<APoplarPlayerController>()->eventServerSelectCharacter(nullptr, nullptr, nullptr, true);
-                SDKUtils::GetLastOfClass<APoplarPlayerController>()->ServerPlayerSelectClass(L"", L"");
-
-                while (GetAsyncKeyState(VK_F7)) {
-
-                }
-            }
-        }
-    }
 }
 
 BOOL APIENTRY DllMain( HMODULE hModule,

@@ -9,7 +9,7 @@ namespace ServerSettings {
 
     unsigned int TeamMinSizeForStart = 0;
 
-    const wchar_t* MapString = L"open Wishbone_P?bTournamentMode=1";
+    const wchar_t* MapString = L"open Toby_Raid_P?bTournamentMode=1";
 
     bool amRunningWithGameCoordinator = false;
 

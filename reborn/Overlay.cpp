@@ -71,7 +71,58 @@ namespace Overlay {
         }
     }
 
+    void UnfuckCharacterSelect(APoplarPlayerController* ppc, int characterSelectIDX) {
+        Sleep(1 * 1000);
+
+        ppc->ServerCharacterSelectInput(characterSelectIDX);
+
+        ppc->ServerSetHasReceivedEntitlements();
+        ppc->eventServerSelectCharacter(nullptr, nullptr, nullptr, true);
+        ppc->ServerPlayerSelectClass(L"", L"");
+    }
+
     void Render() {
+        if (Globals::CharacterSelectMenuOpen) {
+            ImGui::Begin("Character & Gear Select", &Globals::CreateGameOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            if (ImGui::BeginTabBar("CharacterGearSelect")) {
+                if (!Globals::CharacterSelectHasLockedIn) {
+                    if (ImGui::BeginTabItem("Character Select")) {
+                        for (int i = 0; i < 30; i++) {
+                            if (ImGui::Button(("Lock In " + Constants::CharacterSelectCharacterTable[i]).c_str())) {
+                                Globals::CharacterSelectHasLockedIn = true;
+
+                                // We're on the client here, so we should only ever have one PPC (aside from the CDO), so this *shouldn't* break. TODO refactor tho
+                                APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
+
+                                ppc->ServerCharacterSelectInput(i);
+
+                                ppc->ServerSetHasReceivedEntitlements();
+                                ppc->eventServerSelectCharacter(nullptr, nullptr, nullptr, true);
+                                ppc->ServerPlayerSelectClass(L"", L"");
+
+                                ppc->ServerCharacterSelectInput(i);
+
+                                std::thread t(UnfuckCharacterSelect, ppc, i);
+                                t.detach();
+                            }
+                        }
+
+                        ImGui::EndTabItem();
+                    }
+                }
+                if (ImGui::BeginTabItem("Gear Select")) {
+                    ImGui::EndTabItem();
+                }
+
+                ImGui::EndTabBar();
+            }
+
+            ImGui::End();
+        }
+
         if (Globals::CreateGameOpen) {
             //std::string InstanceName, std::string HumanReadableInstanceMapMode, std::string ServerStartupCommand, int MaxNumPlayers, std::string Password
             

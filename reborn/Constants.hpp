@@ -8,7 +8,36 @@ namespace Constants {
     const std::string GameCoordinatorEndpoint = "gc.bereborn.dev:5000";
 
     const std::vector<std::string> CharacterSelectCharacterTable = {
-
+        "Alani",
+        "Ambra",
+        "Attikus",
+        "Beatrix",
+        "Benedict",
+        "Boldur",
+        "Caldarius",
+        "Deande",
+        "El Dragon",
+        "Ernest",
+        "Galilea",
+        "Ghalt",
+        "ISIC",
+        "Kelvin",
+        "Kid Ultra",
+        "Kleese",
+        "Marquis",
+        "Mellka",
+        "Miko",
+        "Montana",
+        "Orendi",
+        "Oscar Mike",
+        "Pendles",
+        "Pheobe",
+        "Rath",
+        "Reyna",
+        "Shayne & Aurox",
+        "Thorn",
+        "Toby",
+        "Whiskey Foxtrot"
     };
 
     const std::unordered_map<std::string, std::string> CharacterLookupTable = {
