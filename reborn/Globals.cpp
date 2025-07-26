@@ -94,6 +94,8 @@ namespace Globals {
 
     std::vector<AActor*> NetworkObjectList = std::vector<AActor*>();
 
+    bool CharacterSelectMenuOpen = false;
+
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
     }

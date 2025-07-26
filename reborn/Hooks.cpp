@@ -317,10 +317,28 @@ namespace Hooks {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         }
         */
-
-        //eventReplicated
-        if (function->GetFullName().contains("Entitlements")) {
+        /*
+        if (function->GetFullName().contains("CharacterSelect")) {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
+        }*/
+
+        static UFunction* characterSelectUFunction = nullptr;
+
+        if (!characterSelectUFunction)
+            characterSelectUFunction = UFunction::FindFunction("Function PoplarGame.PoplarCharacterSelectGFxMovie.extRequestPopulatePerks");
+
+        if (!Globals::amServer && !Globals::amStandalone && function == characterSelectUFunction) {
+            reinterpret_cast<UPoplarCharacterSelectGFxMovie*>(object)->bMovieAndManagerReady = true;
+            Globals::CharacterSelectMenuOpen = true;
+        }
+
+        static UFunction* characterSelectClosedUFunction = nullptr;
+
+        if (!characterSelectClosedUFunction)
+            characterSelectClosedUFunction = UFunction::FindFunction("Function PoplarGame.PoplarCharacterSelectGFxMovie.WaitForCharacterSelectLevelToUnload");
+
+        if (!Globals::amServer && !Globals::amStandalone && function == characterSelectClosedUFunction) {
+            Globals::CharacterSelectMenuOpen = false;
         }
 
         static UFunction* matchEndedUFunction = nullptr;

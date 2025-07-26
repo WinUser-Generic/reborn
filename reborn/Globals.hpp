@@ -114,6 +114,8 @@ namespace Globals {
     
     extern std::vector<AActor*> NetworkObjectList;
 
+    extern bool CharacterSelectMenuOpen;
+
     namespace Telemetry {
         extern std::mutex TickrateMutex;
 
