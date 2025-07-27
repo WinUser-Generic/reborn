@@ -74,11 +74,15 @@ namespace Overlay {
     void UnfuckCharacterSelect(APoplarPlayerController* ppc, int characterSelectIDX) {
         Sleep(1 * 1000);
 
+        Globals::CharacterSelectThisPossesionsTheRealOne = true;
+
         ppc->ServerCharacterSelectInput(characterSelectIDX);
 
         ppc->ServerSetHasReceivedEntitlements();
         ppc->eventServerSelectCharacter(nullptr, nullptr, nullptr, true);
         ppc->ServerPlayerSelectClass(L"", L"");
+
+        
     }
 
     void Render() {

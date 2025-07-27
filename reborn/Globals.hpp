@@ -118,6 +118,8 @@ namespace Globals {
 
     extern bool CharacterSelectHasLockedIn;
 
+    extern bool CharacterSelectThisPossesionsTheRealOne;
+
     namespace Telemetry {
         extern std::mutex TickrateMutex;
 

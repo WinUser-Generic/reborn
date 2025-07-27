@@ -484,6 +484,48 @@ namespace Hooks {
             characterPossessionUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerAcknowledgePossession");
 
         if (function == characterPossessionUFunction) {
+            if (!Globals::amStandalone) {
+                APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
+
+                bool alreadySetup = false;
+                for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
+                    if (cmpPPC == ppc) {
+                        alreadySetup = true;
+                        break;
+                    }
+                }
+
+                if (!Globals::amServer) { // && Globals::CharacterSelectThisPossesionsTheRealOne
+                    SDKUtils::GetLastOfClass< UMHW_DeathRecap>()->SetVisible(false, 0.0f);
+
+                    if (ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
+                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
+
+                        for (int i = 0; i < 5; i++) {
+                            if (i < ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations.size())
+                                ppc->MyPoplarPRI->GetMetaPRI()->UnlockedMutations[i] = ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations[i]->MutationMetaItemDefinition;
+                        }
+
+                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+                    }
+                }
+                else if(Globals::amServer) {
+                    if ( ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
+                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
+
+                        for (int i = 0; i < 5; i++) {
+                            if (i < ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations.size())
+                                ppc->MyPoplarPRI->GetMetaPRI()->UnlockedMutations[i] = ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations[i]->MutationMetaItemDefinition;
+                        }
+
+                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+                    }
+                }
+            }
+        }
+
+        /*
+        if (function == characterPossessionUFunction) {
             if (!Globals::amStandalone) { // In theory should never happen outside of networked play, but I've been wrong before...
                 APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
 
@@ -611,7 +653,7 @@ namespace Hooks {
                 }
             }
         }
-
+        */
         static UFunction* serverConvolveUFunction = nullptr;
 
         if (!serverConvolveUFunction)
