@@ -153,49 +153,6 @@ namespace Hooks {
                 }
             }
 
-            if (Globals::netDriver && Globals::timeTillStartupMassacre > 0.0f) {
-                bool tickTheDoomTimer = true;
-
-                for (UNetConnection* Connection : Globals::connections) {
-                    if (Connection && (APoplarPlayerController*)Connection->Actor && (((APoplarPlayerController*)Connection->Actor)->bPendingInitializeView) && (((APoplarPlayerController*)Connection->Actor)->TestPerk.bActive)) {
-                        tickTheDoomTimer = false;
-                        break;
-                    }
-                }
-
-                if (tickTheDoomTimer) {
-                    Globals::timeTillStartupMassacre -= DeltaTime;
-                }
-
-                if (Globals::timeTillStartupMassacre <= 0.0f) {
-                    Globals::hasStartupMassacreHappened = true;
-
-                    std::cout << "[GAME] Committing startup massacre to sync everyone up!" << std::endl;
-                    int numPlayersRestarted = 0;
-
-                    for (UNetConnection* Connection : Globals::connections) {
-                        if (Connection->Actor && ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
-                            numPlayersRestarted++;
-                            FVector loc = ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Location;
-                            Hooks::DestroyActorHook(Globals::GetGWorld(), ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn, true);
-                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->bStatic = false;
-                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->bNoDelete = false;
-                            ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Destroy();
-                            ((APoplarPlayerController*)Connection->Actor)->ServerRestartPlayer();
-                            if (((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn) {
-                                ((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->SetLocation(loc);
-                            }
-                            else {
-                                std::cout << "[GAME] Error: Didn't get pawn after ServerRestartPlayer" << std::endl;
-                            }
-                            //((APoplarPlayerController*)Connection->Actor)->MyPoplarPawn->Suicide();
-                        }
-                    }
-
-                    std::cout << "[DEBUG] Restarted " << numPlayersRestarted << " players" << std::endl;
-                }
-            }
-
             if (Globals::timeTillHumanStart > 0.0f) {
                 Globals::timeTillHumanStart -= DeltaTime;
 
@@ -313,14 +270,15 @@ namespace Hooks {
 
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
         /*
-        if (!function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Move")) {
+        if (Globals::amServer && !function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Move")) {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         }
         */
         /*
-        if (function->GetFullName().contains("CharacterSelect")) {
+        if (function->GetFullName().contains("Character") || function->GetFullName().contains("Select")) {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
-        }*/
+        }
+        */
 
         static UFunction* characterSelectUFunction = nullptr;
 
