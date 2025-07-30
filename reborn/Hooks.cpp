@@ -26,28 +26,58 @@ namespace Hooks {
         return 1;
     }
 
+    Globals::ServerPlayer* ConnectionToServerPlayer(UNetConnection* connection) {
+        for (Globals::ServerPlayer& serverPlayer : Globals::ServerPlayers) {
+            if(serverPlayer.Connection == connection)
+                return &serverPlayer;
+        }
+
+        return nullptr;
+    }
+
     void WorldControlMessageHook(UWorld* world, UNetConnection* connection, uint8_t message, void* inbunch) {
         WorldControlMessage.call<void>(world, connection, message, inbunch);
 
         static int numPlayersJoined = 0;
-
+        
         if (message == 0x0) {
-            if (numPlayersJoined < ServerSettings::NumPlayersToStart) {
+            if (ServerSettings::amRunningWithGameCoordinator && Globals::NextExpectedServerPlayer) {
+                printf("[NETWORKING] Welcoming %s\n", Globals::NextExpectedServerPlayer->Name.c_str());
+
+                for (Globals::ServerPlayer& serverPlayer : Globals::ServerPlayers) {
+                    if (&serverPlayer == Globals::NextExpectedServerPlayer) {
+                        serverPlayer.Connection = connection;
+                        Globals::NextExpectedServerPlayer = nullptr;
+
+                        break;
+                    }
+                }
+
+                reinterpret_cast<void* (*)(UWorld*, UNetConnection*)>(Globals::baseAddress + 0x045b060)(world, connection);
+            }
+            else if (!ServerSettings::amRunningWithGameCoordinator) {
                 printf("[NETWORKING] Welcoming a new player!\n");
+
+                Globals::ServerPlayer serverPlayer = Globals::ServerPlayer("LAN Player", "PoplarPlayerNameIdentifierDefinition GD_RocketHawk.NameId_RocketHawk", "", "", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_MaxShield_Legendary_UPR2", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_MaxShield_Legendary_UPR2", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_MaxShield_Legendary_UPR2");
+
+                serverPlayer.Connection = connection;
+
+                Globals::ServerPlayers.push_back(serverPlayer);
 
                 reinterpret_cast<void* (*)(UWorld*, UNetConnection*)>(Globals::baseAddress + 0x045b060)(world, connection);
             }
         }
         else if (message == 0x9) {
-            printf("[NETWORKING] Spawning a new player!\n");
+            Globals::ServerPlayer* player = ConnectionToServerPlayer(connection);
 
-            numPlayersJoined++;
+            if (player) {
+                printf("[NETWORKING] Spawning %s!\n", player->Name.c_str());
 
-            Globals::connections.push_back(connection);
-            Globals::sentTemporaries.push_back(std::make_pair(connection, new std::vector<AActor*>()));
+                numPlayersJoined++;
 
-            if (numPlayersJoined == ServerSettings::NumPlayersToStart) {
-                Globals::timeTillHumanStart = 5.0f;
+                if (numPlayersJoined >= ServerSettings::NumPlayersToStart) {
+                    Globals::timeTillHumanStart = 5.0f;
+                }
             }
         }
         else if (message == 0xf) {
@@ -161,47 +191,79 @@ namespace Hooks {
 
                     SDKUtils::GetLastOfClass<APoplarGameInfo>()->StartHumans();
 
-                    for (UNetConnection* connection2 : Globals::connections) {
-                        UWorld* theWorld = Globals::GetGWorld();
-                        FURL theURL = FURL();
+                    for (Globals::ServerPlayer& serverPlayer: Globals::ServerPlayers) {
+                        if (serverPlayer.Connection) {
+                            UWorld* theWorld = Globals::GetGWorld();
+                            FURL theURL = FURL();
 
-                        FUniqueNetId* netID = (FUniqueNetId*)Engine::EngineMalloc(sizeof(FUniqueNetId));
+                            FUniqueNetId* netID = (FUniqueNetId*)Engine::EngineMalloc(sizeof(FUniqueNetId));
 
-                        *netID = FUniqueNetId();
+                            *netID = FUniqueNetId();
 
-                        netID->bHasValue = true;
+                            netID->bHasValue = true;
 
-                        static uint8_t id = 0x0;
+                            static uint8_t id = 0x0;
 
-                        id++;
+                            id++;
 
-                        netID->RawId[0] = id;
+                            netID->RawId[0] = id;
 
-                        FString err = FString();
+                            FString err = FString();
 
-                        FString* portalString = (FString*)Engine::EngineMalloc(sizeof(FString));
+                            FString* portalString = (FString*)Engine::EngineMalloc(sizeof(FString));
 
-                        *portalString = FString();
+                            *portalString = FString();
 
-                        FString* optionsString = (FString*)Engine::EngineMalloc(sizeof(FString));
+                            FString* optionsString = (FString*)Engine::EngineMalloc(sizeof(FString));
 
-                        *optionsString = FString();
+                            *optionsString = FString();
 
-                        APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(*portalString, *optionsString, *netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
+                            APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(*portalString, *optionsString, *netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
 
-                        pc->eventServerSelectCharacter(UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>("PoplarPlayerNameIdentifierDefinition GD_RocketHawk.NameId_RocketHawk"), UObject::FindObject<UPoplarMetaSkinDefinition>("PoplarMetaSkinDefinition GD_RocketHawk_CLO03.Skins.SkinId_Basic003"), UObject::FindObject<UPoplarMetaTauntDefinition>("PoplarMetaTauntDefinition GD_RocketHawk_CLO03.Taunts.Taunt_RocketHawk_Taunt007"), true);
-                        pc->eventServerSelectCharacterSkin(UObject::FindObject<UPoplarMetaSkinDefinition>("PoplarMetaSkinDefinition GD_RocketHawk_CLO03.Skins.SkinId_Basic003"));
-                        pc->eventServerSelectCharacterTaunt(UObject::FindObject<UPoplarMetaTauntDefinition>("PoplarMetaTauntDefinition GD_RocketHawk_CLO03.Taunts.Taunt_RocketHawk_Taunt007"));
+                            pc->eventServerSelectCharacter(serverPlayer.Character, serverPlayer.OptionalSkin, serverPlayer.OptionalTaunt, true);
 
-                        connection2->Actor = pc;
+                            if (serverPlayer.OptionalSkin)
+                                pc->eventServerSelectCharacterSkin(serverPlayer.OptionalSkin);
 
-                        pc->Player = connection2;
+                            if(serverPlayer.OptionalTaunt)
+                                pc->eventServerSelectCharacterTaunt(serverPlayer.OptionalTaunt);
 
-                        pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
+                            if (serverPlayer.GearSlotOne) {
+                                pc->MyPoplarPRI->Perks[0].PerkFunction = serverPlayer.GearSlotOne;
+                                pc->MyPoplarPRI->Perks[0].bActive = 1;
+                                pc->MyPoplarPRI->Perks[0].bCanUse = 1;
+                                pc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(serverPlayer.GearSlotOne->GetFullName());
+                            }
 
+                            if (serverPlayer.GearSlotTwo) {
+                                pc->MyPoplarPRI->Perks[1].PerkFunction = serverPlayer.GearSlotTwo;
+                                pc->MyPoplarPRI->Perks[1].bActive = 1;
+                                pc->MyPoplarPRI->Perks[1].bCanUse = 1;
+                                pc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(serverPlayer.GearSlotTwo->GetFullName());
+                            }
+
+                            if (serverPlayer.GearSlotThree) {
+                                pc->MyPoplarPRI->Perks[2].PerkFunction = serverPlayer.GearSlotThree;
+                                pc->MyPoplarPRI->Perks[2].bActive = 1;
+                                pc->MyPoplarPRI->Perks[2].bCanUse = 1;
+                                pc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(serverPlayer.GearSlotThree->GetFullName());
+                            }
+
+                            std::wstring wPlayerName = std::wstring(serverPlayer.Name.begin(), serverPlayer.Name.end());
+
+                            pc->MyPoplarPRI->PlayerName = FString(wcsdup(wPlayerName.c_str())); // TODO: stop leaking memory like it's going out of style
+
+                            serverPlayer.Connection->Actor = pc;
+
+                            pc->Player = serverPlayer.Connection;
+
+                            pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
+
+                            SDKUtils::GetLastOfClass<AGameInfo>()->eventPostLogin(pc);
+
+                            serverPlayer.shouldReplicateTo = true;
+                        }
                     }
-
-                    Globals::timeTillStartupMassacre = 15.0f;
                 }
             }
 
@@ -374,12 +436,13 @@ namespace Hooks {
         if (function == eventNotifyDisconnectUFunction) {
             std::cout << "[NETWORKING] Player notifyDisconnect!" << std::endl;
 
-            Globals::connections.erase(std::remove_if(Globals::connections.begin(), Globals::connections.end(), [&object](UNetConnection* cmp) {
-                if (cmp->Actor == object)
+            for (Globals::ServerPlayer& serverPlayer : Globals::ServerPlayers) {
+                if (serverPlayer.Connection && serverPlayer.Connection->Actor == object) {
                     std::cout << "[NETWORKING] Player disconnected!" << std::endl;
 
-                return cmp->Actor == object;
-                }), Globals::connections.end());
+                    serverPlayer.Connection = nullptr;
+                }
+            }
         }
 
         static UFunction* clientTravelUFunction = nullptr;
@@ -512,7 +575,7 @@ namespace Hooks {
                 if (!Globals::amServer) { // && Globals::CharacterSelectThisPossesionsTheRealOne
                     SDKUtils::GetLastOfClass< UMHW_DeathRecap>()->SetVisible(false, 0.0f);
 
-                    if (ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet && Globals::CharacterSelectThisPossesionsTheRealOne) {
+                    if (ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
                         Globals::ppcsWeSetupAugsFor.push_back(ppc);
 
                         for (int i = 0; i < 5; i++) {
@@ -656,7 +719,9 @@ namespace Hooks {
 
     bool DestroyActorHook(UWorld* world, AActor* actor, bool force) {
         if (Globals::netDriver) {
-            for (UNetConnection* connection : Globals::connections) {
+            for (const Globals::ServerPlayer& serverPlayer: Globals::ServerPlayers) {
+                UNetConnection* connection = serverPlayer.Connection;
+
                 UActorChannel* ch = ServerNetworking::GetActorChannelForActor(actor, connection);
 
                 if (ch) {

@@ -11,13 +11,46 @@
 #include "GameCoordinator.hpp"
 
 namespace Globals {
+    struct ServerPlayer {
+        UNetConnection* Connection = nullptr;
+        std::vector<AActor*> SentTemporaries = std::vector<AActor*>();
+        std::string Name;
+        UPoplarPlayerNameIdentifierDefinition* Character = nullptr;
+        UPoplarMetaSkinDefinition* OptionalSkin = nullptr;
+        UPoplarMetaTauntDefinition* OptionalTaunt = nullptr;
+        UPoplarPerkFunction* GearSlotOne = nullptr;
+        UPoplarPerkFunction* GearSlotTwo = nullptr;
+        UPoplarPerkFunction* GearSlotThree = nullptr;
+        bool shouldReplicateTo = false;
+
+        ServerPlayer(std::string PlayerName, std::string CharacterObjectName, std::string SkinObjectName, std::string TauntObjectName, std::string GearSlotOneObjectName, std::string GearSlotTwoObjectName, std::string GearSlotThreeObjectName){
+            this->Name = PlayerName;
+            this->Character = UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>(CharacterObjectName);
+
+            if (SkinObjectName.size() > 0)
+                this->OptionalSkin = UObject::FindObject<UPoplarMetaSkinDefinition>(SkinObjectName);
+
+            if (TauntObjectName.size() > 0)
+                this->OptionalTaunt = UObject::FindObject<UPoplarMetaTauntDefinition>(TauntObjectName);
+
+            if (GearSlotOneObjectName.size() > 0)
+                this->GearSlotOne = UObject::FindObject<UPoplarPerkFunction>(GearSlotOneObjectName);
+
+            if (GearSlotTwoObjectName.size() > 0)
+                this->GearSlotTwo = UObject::FindObject<UPoplarPerkFunction>(GearSlotTwoObjectName);
+
+            if (GearSlotThreeObjectName.size() > 0)
+                this->GearSlotThree = UObject::FindObject<UPoplarPerkFunction>(GearSlotThreeObjectName);
+        }
+    };
+
+    extern ServerPlayer* NextExpectedServerPlayer;
+
+    extern std::vector<ServerPlayer> ServerPlayers;
+
     extern uintptr_t baseAddress;
 
     extern UTcpNetDriver* netDriver;
-
-    extern std::vector<UNetConnection*> connections;
-
-    extern std::vector<std::pair<UNetConnection*, std::vector<AActor*>*>> sentTemporaries;
 
     extern std::vector<UActorChannel*> channelsToClose;
 

@@ -19,7 +19,13 @@ namespace ServerNetworking {
     void GameControllerPoll() {
         nlohmann::json jsonBody = nlohmann::json();
 
-        jsonBody["ConnectedPlayers"] = Globals::connections.size();
+        int numConnectedPlayers = 0;
+        for (Globals::ServerPlayer& serverPlayer: Globals::ServerPlayers) {
+            if (serverPlayer.Connection)
+                numConnectedPlayers++;
+        }
+
+        jsonBody["ConnectedPlayers"] = numConnectedPlayers;
         jsonBody["HumansHaveStarted"] = Globals::haveHumansStarted;
 
         Globals::GameCoordinatorHttpClient.get()->Post("/api/games/server-poll", jsonBody.dump(), "application/json");
@@ -51,7 +57,7 @@ namespace ServerNetworking {
             telemetrySnapshotPoll["ReplicationFNames"] = Globals::Telemetry::ReplicationFNames;
         }
 
-        telemetrySnapshotPoll["PlayersConnected"] = Globals::connections.size();
+        telemetrySnapshotPoll["PlayersConnected"] = numConnectedPlayers;
 
         telemetrySnapshotPoll["MaxPlayers"] = ServerSettings::NumPlayersToStart;
 
@@ -205,19 +211,20 @@ namespace ServerNetworking {
         std::vector<AActor*> actors = BuildConsiderList(worldInfo, NetDriver);
 
         //std::sort(actors.begin(), actors.end(), CompareActorPriority);
+        
+        for (Globals::ServerPlayer& serverPlayer: Globals::ServerPlayers) {
+            UNetConnection* connection = serverPlayer.Connection;
 
-        for (UNetConnection* connection : Globals::connections) {
             if (!connection)
+                continue;
+
+            if (!serverPlayer.shouldReplicateTo)
                 continue;
 
             if (GetConnectionState(connection) < 3) {
                 if (connection->Actor) {
-                    Globals::connections.erase(std::remove_if(Globals::connections.begin(), Globals::connections.end(), [&connection](UNetConnection* cmp) {
-                        if (cmp == connection)
-                            std::cout << "[NETWORKING] Player disconnected!" << std::endl;
-
-                        return cmp == connection;
-                        }), Globals::connections.end());
+                    serverPlayer.Connection = nullptr;
+                    std::cout << "[NETWORKING] Player disconnected!" << std::endl;
                 }
 
                 continue;
@@ -251,26 +258,18 @@ namespace ServerNetworking {
                     markedAsNoGC = true;
                 }
 
-                (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
-
                 if (actor->bNetTemporary || actor->bTearOff) {
                     bool shouldContinue = false;
 
-                    for (auto pair : Globals::sentTemporaries) {
-                        if (pair.first == connection) {
-                            for (AActor* cmpActor : *(pair.second)) {
-                                if (actor == cmpActor) {
-                                    shouldContinue = true;
-                                    break;
-                                }
-                            }
-
-                            if (!shouldContinue) {
-                                pair.second->push_back(actor);
-                            }
-
+                    for (AActor* cmpActor : serverPlayer.SentTemporaries) {
+                        if (actor == cmpActor) {
+                            shouldContinue = true;
                             break;
                         }
+                    }
+
+                    if (!shouldContinue) {
+                        serverPlayer.SentTemporaries.push_back(actor);
                     }
 
                     if (shouldContinue) {
@@ -279,6 +278,8 @@ namespace ServerNetworking {
                 }
 
                 //printf("[NETWORKING] Starting the replication run for %s\n", actor->GetFullName().c_str());
+
+                (*(void(__fastcall**)(UNetConnection*, AActor*))(*(__int64*)connection + 624LL))(connection, actor);
 
                 UActorChannel* channel = GetActorChannelForActor(actor, connection);
 

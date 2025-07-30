@@ -1,13 +1,13 @@
 #include "Globals.hpp"
 
 namespace Globals {
+    ServerPlayer* NextExpectedServerPlayer = nullptr;
+
+    std::vector<ServerPlayer> ServerPlayers = std::vector<ServerPlayer>();
+
     uintptr_t baseAddress = 0x0;
 
     UTcpNetDriver* netDriver = 0x0;
-
-    std::vector<UNetConnection*> connections = std::vector<UNetConnection*>();
-
-    std::vector<std::pair<UNetConnection*, std::vector<AActor*>*>> sentTemporaries = std::vector<std::pair<UNetConnection*, std::vector<AActor*>*>>();
 
     std::vector<UActorChannel*> channelsToClose = std::vector<UActorChannel*>();
 
