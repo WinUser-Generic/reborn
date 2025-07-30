@@ -58,7 +58,7 @@ namespace Hooks {
             else if (!ServerSettings::amRunningWithGameCoordinator) {
                 printf("[NETWORKING] Welcoming a new player!\n");
 
-                Globals::ServerPlayer serverPlayer = Globals::ServerPlayer("LAN Player", "PoplarPlayerNameIdentifierDefinition GD_RocketHawk.NameId_RocketHawk", "", "", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_MaxShield_Legendary_UPR2", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_MaxShield_Legendary_UPR2", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_MaxShield_Legendary_UPR2");
+                Globals::ServerPlayer serverPlayer = Globals::ServerPlayer("LAN Player", "PoplarPlayerNameIdentifierDefinition GD_RocketHawk.NameId_RocketHawk", "", "", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_MaxShield_Legendary_UPR2", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_ShieldPen_Legendary_UPR2", "PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_HealthRegen_Legendary_LLC2");
 
                 serverPlayer.Connection = connection;
 
@@ -228,20 +228,19 @@ namespace Hooks {
                             if(serverPlayer.OptionalTaunt)
                                 pc->eventServerSelectCharacterTaunt(serverPlayer.OptionalTaunt);
 
+                            
                             if (serverPlayer.GearSlotOne) {
                                 pc->MyPoplarPRI->Perks[0].PerkFunction = serverPlayer.GearSlotOne;
                                 pc->MyPoplarPRI->Perks[0].bActive = 1;
                                 pc->MyPoplarPRI->Perks[0].bCanUse = 1;
                                 pc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(serverPlayer.GearSlotOne->GetFullName());
                             }
-
                             if (serverPlayer.GearSlotTwo) {
                                 pc->MyPoplarPRI->Perks[1].PerkFunction = serverPlayer.GearSlotTwo;
                                 pc->MyPoplarPRI->Perks[1].bActive = 1;
                                 pc->MyPoplarPRI->Perks[1].bCanUse = 1;
                                 pc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(serverPlayer.GearSlotTwo->GetFullName());
                             }
-
                             if (serverPlayer.GearSlotThree) {
                                 pc->MyPoplarPRI->Perks[2].PerkFunction = serverPlayer.GearSlotThree;
                                 pc->MyPoplarPRI->Perks[2].bActive = 1;
@@ -252,6 +251,10 @@ namespace Hooks {
                             std::wstring wPlayerName = std::wstring(serverPlayer.Name.begin(), serverPlayer.Name.end());
 
                             pc->MyPoplarPRI->PlayerName = FString(wcsdup(wPlayerName.c_str())); // TODO: stop leaking memory like it's going out of style
+                            pc->MyPoplarPRI->UniqueId.bHasValue = true;
+                            pc->MyPoplarPRI->UniqueId.RawId[0x0] = id;
+
+                            serverPlayer.UniqueId = (int)id;
 
                             serverPlayer.Connection->Actor = pc;
 
@@ -394,6 +397,39 @@ namespace Hooks {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         }
         */
+
+        static UFunction* overriddenClientSetScoreboardData = nullptr;
+
+        if (!overriddenClientSetScoreboardData)
+            overriddenClientSetScoreboardData = UFunction::FindFunction("Function Engine.PlayerController.ClientSetProgressMessage");
+
+        if (!Globals::amServer && !Globals::amStandalone && function == overriddenClientSetScoreboardData) {
+            APlayerController_eventClientSetProgressMessage_Params* parms = reinterpret_cast<APlayerController_eventClientSetProgressMessage_Params*>(params);
+
+            UPoplarScoreboardGFxMovie* scoreboard = SDKUtils::GetLastOfClass<UPoplarScoreboardGFxMovie>();
+
+            
+
+            std::wstring wJsonStr = std::wstring(parms->Message.c_str());
+
+            std::string jsonStr = std::string(wJsonStr.begin(), wJsonStr.end());
+
+            nlohmann::json jsonObj = nlohmann::json::parse(jsonStr);
+
+            for (FPlayerDetailInfo detail : scoreboard->CachedPlayerInfo) {
+                std::string playerName = jsonObj[std::to_string(detail.UniqueId.RawId[0])];
+
+                std::wstring wPlayerName = std::wstring(playerName.begin(), playerName.end());
+
+                std::cout << playerName << std::endl;
+
+                detail.PlayerNameHTML = wcsdup(wPlayerName.c_str()); // TODO: yeah I know
+            }
+
+            std::cout << scoreboard->CachedPlayerInfo.size() << std::endl;
+
+            return;
+        }
 
         static UFunction* characterSelectUFunction = nullptr;
 
@@ -564,38 +600,78 @@ namespace Hooks {
             if (!Globals::amStandalone) {
                 APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
 
-                bool alreadySetup = false;
-                for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
-                    if (cmpPPC == ppc) {
-                        alreadySetup = true;
-                        break;
-                    }
-                }
-
                 if (!Globals::amServer) { // && Globals::CharacterSelectThisPossesionsTheRealOne
                     SDKUtils::GetLastOfClass< UMHW_DeathRecap>()->SetVisible(false, 0.0f);
 
                     if (ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
-                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
-
                         for (int i = 0; i < 5; i++) {
                             if (i < ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations.size())
                                 ppc->MyPoplarPRI->GetMetaPRI()->UnlockedMutations[i] = ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations[i]->MutationMetaItemDefinition;
                         }
 
                         ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                        ppc->MyPoplarPRI->Perks[0].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_MaxShield_Legendary_UPR2");
+                        ppc->MyPoplarPRI->Perks[0].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[0].PerkFunction->GetFullName());
+
+                        ppc->MyPoplarPRI->Perks[1].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_ShieldPen_Legendary_UPR2");
+                        ppc->MyPoplarPRI->Perks[1].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[1].PerkFunction->GetFullName());
+
+                        ppc->MyPoplarPRI->Perks[2].PerkFunction = UObject::FindObject<UPoplarPerkFunction>("PoplarPerkFunction GD_Gear_DAH.Gear.PF_Gear_HealthRegen_Legendary_LLC2");
+                        ppc->MyPoplarPRI->Perks[2].bActive = 1;
+                        ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
+                        ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[2].PerkFunction->GetFullName());
                     }
                 }
                 else if(Globals::amServer) {
                     if ( ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
-                        Globals::ppcsWeSetupAugsFor.push_back(ppc);
+                        Globals::ServerPlayer* serverPlayer = ConnectionToServerPlayer((UNetConnection*)ppc->Player);
 
-                        for (int i = 0; i < 5; i++) {
-                            if (i < ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations.size())
-                                ppc->MyPoplarPRI->GetMetaPRI()->UnlockedMutations[i] = ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations[i]->MutationMetaItemDefinition;
+                        if (serverPlayer) {
+                            for (int i = 0; i < 5; i++) {
+                                if (i < ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations.size())
+                                    ppc->MyPoplarPRI->GetMetaPRI()->UnlockedMutations[i] = ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations[i]->MutationMetaItemDefinition;
+                            }
+
+                            ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
+
+                            if (serverPlayer->GearSlotOne) {
+                                ppc->MyPoplarPRI->Perks[0].PerkFunction = serverPlayer->GearSlotOne;
+                                ppc->MyPoplarPRI->Perks[0].bActive = 1;
+                                ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
+                                ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[0].PerkFunction->GetFullName());
+                            }
+
+                            if (serverPlayer->GearSlotTwo) {
+                                ppc->MyPoplarPRI->Perks[1].PerkFunction = serverPlayer->GearSlotTwo;
+                                ppc->MyPoplarPRI->Perks[1].bActive = 1;
+                                ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
+                                ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[1].PerkFunction->GetFullName());
+                            }
+
+                            if (serverPlayer->GearSlotThree) {
+                                ppc->MyPoplarPRI->Perks[2].PerkFunction = serverPlayer->GearSlotThree;
+                                ppc->MyPoplarPRI->Perks[2].bActive = 1;
+                                ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
+                                ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[2].PerkFunction->GetFullName());
+                            }
+
+                            nlohmann::json jsonObj = nlohmann::json();
+
+                            for (const auto& serverPlayer : Globals::ServerPlayers) {
+                                jsonObj[std::to_string(serverPlayer.UniqueId)] = serverPlayer.Name;
+                            }
+
+                            std::string jsonString = jsonObj.dump();
+
+                            std::wstring wJsonString = std::wstring(jsonString.begin(), jsonString.end());
+
+                            ppc->eventClientSetProgressMessage(EProgressMessageType::PMT_END, wJsonString.c_str(), L"", false);
                         }
-
-                        ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
                     }
                 }
             }
