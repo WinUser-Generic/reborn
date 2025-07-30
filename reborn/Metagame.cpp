@@ -2,6 +2,7 @@
 
 #include "Utils.hpp"
 #include "Globals.hpp"
+#include "Constants.hpp"
 
 namespace Metagame {
     std::string GetDocumentsPath() {
@@ -235,5 +236,15 @@ namespace Metagame {
         }
 
         throw std::exception("Invalid Character passed to GetCharacterFromName!");
+    }
+
+    std::string ReverseCharacterLookup(std::string characterName) {
+        for (const auto& charPair : Constants::CharacterLookupTable) {
+            if (charPair.second == characterName) {
+                return charPair.first;
+            }
+        }
+
+        return "";
     }
 }

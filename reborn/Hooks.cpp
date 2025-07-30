@@ -162,7 +162,6 @@ namespace Hooks {
                     SDKUtils::GetLastOfClass<APoplarGameInfo>()->StartHumans();
 
                     for (UNetConnection* connection2 : Globals::connections) {
-
                         UWorld* theWorld = Globals::GetGWorld();
                         FURL theURL = FURL();
 
@@ -190,13 +189,16 @@ namespace Hooks {
 
                         APoplarPlayerController* pc = (APoplarPlayerController*)(SDKUtils::GetLastOfClass<AGameInfo>()->eventLogin(*portalString, *optionsString, *netID, err));//reinterpret_cast<APoplarPlayerController * (__thiscall*)(UWorld * world, UPlayer * player, ENetRole RemoteRole, FURL * url, FUniqueNetId * netID, FString * err, uint8_t InNetPlayerIndex)>(Globals::baseAddress + 0x03ef7b0)(theWorld, connection, ENetRole::ROLE_AutonomousProxy, &theURL, &netID, &err, 0);
 
+                        pc->eventServerSelectCharacter(UObject::FindObject<UPoplarPlayerNameIdentifierDefinition>("PoplarPlayerNameIdentifierDefinition GD_RocketHawk.NameId_RocketHawk"), UObject::FindObject<UPoplarMetaSkinDefinition>("PoplarMetaSkinDefinition GD_RocketHawk_CLO03.Skins.SkinId_Basic003"), UObject::FindObject<UPoplarMetaTauntDefinition>("PoplarMetaTauntDefinition GD_RocketHawk_CLO03.Taunts.Taunt_RocketHawk_Taunt007"), true);
+                        pc->eventServerSelectCharacterSkin(UObject::FindObject<UPoplarMetaSkinDefinition>("PoplarMetaSkinDefinition GD_RocketHawk_CLO03.Skins.SkinId_Basic003"));
+                        pc->eventServerSelectCharacterTaunt(UObject::FindObject<UPoplarMetaTauntDefinition>("PoplarMetaTauntDefinition GD_RocketHawk_CLO03.Taunts.Taunt_RocketHawk_Taunt007"));
+
                         connection2->Actor = pc;
 
                         pc->Player = connection2;
 
                         pc->RemoteRole = ENetRole::ROLE_AutonomousProxy;
 
-                        SDKUtils::GetLastOfClass<AGameInfo>()->eventPostLogin(pc);
                     }
 
                     Globals::timeTillStartupMassacre = 15.0f;
@@ -236,8 +238,6 @@ namespace Hooks {
     void StartupCompletedHook() {
         std::cout << "[GAME] Startup Complete!" << std::endl;
 
-        Engine::ExecConsoleCommand(L"open 127.0.0.1");
-
         SDKUtils::GetLastOfClass<APoplarPlayerController>()->ReadProfile();
         if (!SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue || !SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedVersusPrologue) {
             SDKUtils::GetLastOfClass<UWillowProfile>()->bCompletedPrologue = true;
@@ -252,14 +252,17 @@ namespace Hooks {
         if (PanelId == 1 || PanelId == 2 || PanelId == 6) { // Versus Public; Story Public; Operations Public
             Overlay::OpenServerBrowser();
         }
-        if (PanelId == 4) { // Versus Private
+        else if (PanelId == 4) { // Versus Private
             Overlay::OpenSoloVSAI();
         }
-        if (PanelId == 5) { // Story Private
+        else if (PanelId == 5) { // Story Private
             Overlay::OpenCampaign();
         }
-        if (PanelId == 7) { // Operations Private
+        else if (PanelId == 7) { // Operations Private
             Overlay::OpenOperations();
+        }
+        else if (PanelId == 3 || PanelId == 18) {
+            Globals::GearViewerOpen = true;
         }
         else if (PanelId == 8) { // Dojo
             Globals::amStandalone = true;
@@ -268,14 +271,64 @@ namespace Hooks {
         }
     }
 
+
+    void SetGear() {
+        Sleep(10 * 1000);
+
+        APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
+
+        nlohmann::json jsonObj = nlohmann::json();
+
+        jsonObj["NEMA"] = true;
+
+        if (Globals::GearSlotOne)
+            jsonObj["perkOne"] = Globals::GearSlotOne->itemObjectName;
+
+        if (Globals::GearSlotTwo)
+            jsonObj["perkTwo"] = Globals::GearSlotTwo->itemObjectName;
+
+        if (Globals::GearSlotThree)
+            jsonObj["perkThree"] = Globals::GearSlotThree->itemObjectName;
+
+        std::string jsonObjStr = jsonObj.dump();
+
+        std::wstring wJsonObjStr(jsonObjStr.begin(), jsonObjStr.end());
+
+        ppc->eventServerProcessConvolve(wJsonObjStr.c_str(), 0);
+
+        Sleep(5 * 1000);
+
+        if (Globals::GearSlotOne) {
+            ppc->MyPoplarPRI->Perks[0].PerkFunction = UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotOne->itemObjectName);
+            ppc->MyPoplarPRI->Perks[0].bActive = 1;
+            ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
+            ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotOne->itemObjectName);
+
+            //std::cout << ppc->MyPoplarPRI->Perks[0].PerkFunction->GetFullName() << std::endl;
+
+            
+        }
+
+        if (Globals::GearSlotTwo) {
+            ppc->MyPoplarPRI->Perks[1].PerkFunction = UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotTwo->itemObjectName);
+            ppc->MyPoplarPRI->Perks[1].bActive = 1;
+            ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
+            ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotTwo->itemObjectName);
+        }
+
+        if (Globals::GearSlotThree) {
+            ppc->MyPoplarPRI->Perks[2].PerkFunction = UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotThree->itemObjectName);
+            ppc->MyPoplarPRI->Perks[2].bActive = 1;
+            ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
+            ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotThree->itemObjectName);
+        }
+
+        ppc->MyPoplarPRI->OnRep_Perks(0, ppc->MyPoplarPRI->Perks[0]);
+    }
+
     void ProcessEventHook(UObject* object, UFunction* function, void* params) {
         /*
         if (Globals::amServer && !function->GetFullName().contains("Input") && !function->GetFullName().contains("Timer") && !function->GetFullName().contains("Move")) {
-            printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
-        }
-        */
-        /*
-        if (function->GetFullName().contains("Character") || function->GetFullName().contains("Select")) {
             printf("[PE] %s - %s\n", object->GetFullName().c_str(), function->GetFullName().c_str());
         }
         */
@@ -296,6 +349,9 @@ namespace Hooks {
             characterSelectClosedUFunction = UFunction::FindFunction("Function PoplarGame.PoplarCharacterSelectGFxMovie.WaitForCharacterSelectLevelToUnload");
 
         if (!Globals::amServer && !Globals::amStandalone && function == characterSelectClosedUFunction) {
+            std::thread t(SetGear);
+            t.detach();
+
             Globals::CharacterSelectMenuOpen = false;
         }
 
@@ -456,7 +512,7 @@ namespace Hooks {
                 if (!Globals::amServer) { // && Globals::CharacterSelectThisPossesionsTheRealOne
                     SDKUtils::GetLastOfClass< UMHW_DeathRecap>()->SetVisible(false, 0.0f);
 
-                    if (ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
+                    if (ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet && Globals::CharacterSelectThisPossesionsTheRealOne) {
                         Globals::ppcsWeSetupAugsFor.push_back(ppc);
 
                         for (int i = 0; i < 5; i++) {
@@ -484,131 +540,8 @@ namespace Hooks {
 
         /*
         if (function == characterPossessionUFunction) {
-            if (!Globals::amStandalone) { // In theory should never happen outside of networked play, but I've been wrong before...
-                APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
-
-                if (!Globals::amServer) {
-                    SDKUtils::GetLastOfClass< UMHW_DeathRecap>()->SetVisible(false, 0.0f);
-                }
-
-                if (ppc->MyPoplarPRI) {
-                    if (Globals::amServer && ppc->TestPerk.bActive && ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) {
-                        bool alreadySetup = false;
-                        for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
-                            if (cmpPPC == ppc) {
-                                alreadySetup = true;
-                                break;
-                            }
-                        }
-
-                        if (!alreadySetup) { //
-                            std::cout << "[GAME] Setting up mutations and helix for " << ppc->GetFullName() << std::endl;
-                            Globals::ppcsWeSetupAugsFor.push_back(ppc);
-
-                            ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
-                            for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                                if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef && mut->HelixLevel > ppc->TestPerk.ItemLevel) {
-                                    ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef = (UPoplarAugDefinition*)Engine::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
-                                }
-                            }
-                        }
-                    }
-                    else if (!Globals::amServer) {
-                        if (!Globals::didSendPreferencesToServer) { // We haven't set our prefs yet, send them to the server now
-                            Globals::didSendPreferencesToServer = true;
-
-                            std::cout << "[GAME] Sending Player Preferences to Server" << std::endl;
-
-                            nlohmann::json jsonObj = nlohmann::json();
-
-                            jsonObj["NEMA"] = true;
-                            jsonObj["playerClassNameIdentifier"] = Metagame::GetCharacterObjectNameFromName(Globals::selectedCharacter);
-                            jsonObj["playerLevel"] = Metagame::GetCharacterFromName(Globals::selectedCharacter).level;
-                            jsonObj["playerName"] = Globals::saveFiles[Globals::CurrentSaveFile].name;
-                            if (Globals::GearSlotOne)
-                                jsonObj["perkOne"] = Globals::GearSlotOne->itemObjectName;
-
-                            if (Globals::GearSlotTwo)
-                                jsonObj["perkTwo"] = Globals::GearSlotTwo->itemObjectName;
-
-                            if (Globals::GearSlotThree)
-                                jsonObj["perkThree"] = Globals::GearSlotThree->itemObjectName;
-
-                            std::string jsonObjStr = jsonObj.dump();
-
-                            std::wstring wJsonObjStr(jsonObjStr.begin(), jsonObjStr.end());
-
-                            ppc->eventServerProcessConvolve(wJsonObjStr.c_str(), 0);
-                        }
-                        else if (ppc->MyPoplarPawn && ppc->MyPoplarPawn->PoplarPlayerClassDef && ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet) { // We assume next possession after sending prefs will be our character of choice
-
-                            bool alreadySetup = false;
-                            for (APoplarPlayerController* cmpPPC : Globals::ppcsWeSetupAugsFor) {
-                                if (cmpPPC == ppc) {
-                                    alreadySetup = true;
-                                    break;
-                                }
-                            }
-
-                            if (!alreadySetup) {
-                                std::cout << "[GAME] Running Local Mutation Setup" << std::endl;
-
-                                ppc->MyPoplarPRI->InitializeAugmentations(ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet);
-
-                                for (UMutationDefinition* mut : ppc->MyPoplarPawn->PoplarPlayerClassDef->AugSet->SupportedMutations) {
-                                    if (!ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef && Metagame::GetCharacterFromName(Globals::selectedCharacter).level >= mut->HelixLevel) {
-                                        ppc->MyPoplarPRI->Augs.AllCategories[mut->HelixLevel - 1].Mutation.AugDef = (UPoplarAugDefinition*)Engine::ScuffedDuplicateObject(mut->Augmentation, Globals::GetGWorld());
-                                    }
-                                }
-
-                                if (Globals::GearSlotOne) {
-
-                                    ppc->MyPoplarPRI->Perks[0].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotOne->itemObjectName), Globals::GetGWorld());
-                                    ppc->MyPoplarPRI->Perks[0].PerkFunction->ItemLevelOverride = Globals::GearSlotOne->level;
-                                    ppc->MyPoplarPRI->Perks[0].PerkFunction->bUseItemLevelOverride = true;
-                                    ppc->MyPoplarPRI->Perks[0].bActive = 1;
-                                    ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
-                                    ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotOne->itemObjectName);
-                                    ppc->MyPoplarPRI->Perks[0].ItemLevel = Globals::GearSlotOne->level;
-
-                                    Globals::GearSlotOne = nullptr;
-                                }
-
-                                if (Globals::GearSlotTwo) {
-                                    ppc->MyPoplarPRI->Perks[1].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotTwo->itemObjectName), Globals::GetGWorld());;
-                                    ppc->MyPoplarPRI->Perks[1].PerkFunction->ItemLevelOverride = Globals::GearSlotTwo->level;
-                                    ppc->MyPoplarPRI->Perks[1].PerkFunction->bUseItemLevelOverride = true;
-                                    ppc->MyPoplarPRI->Perks[1].bActive = 1;
-                                    ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
-                                    ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotTwo->itemObjectName);
-                                    ppc->MyPoplarPRI->Perks[1].ItemLevel = Globals::GearSlotTwo->level;
-
-                                    Globals::GearSlotTwo = nullptr;
-                                }
-
-                                if (Globals::GearSlotThree) {
-                                    ppc->MyPoplarPRI->Perks[2].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(UObject::FindObject<UPoplarPerkFunction>(Globals::GearSlotThree->itemObjectName), Globals::GetGWorld());
-                                    ppc->MyPoplarPRI->Perks[2].PerkFunction->ItemLevelOverride = Globals::GearSlotThree->level;
-                                    ppc->MyPoplarPRI->Perks[2].PerkFunction->bUseItemLevelOverride = true;
-                                    ppc->MyPoplarPRI->Perks[2].bActive = 1;
-                                    ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
-                                    ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(Globals::GearSlotThree->itemObjectName);
-                                    ppc->MyPoplarPRI->Perks[2].ItemLevel = Globals::GearSlotThree->level;
-
-                                    Globals::GearSlotThree = nullptr;
-                                }
-
-                                ppc->MyPoplarPRI->OnRep_Perks(0, ppc->MyPoplarPRI->Perks[0]);
-                                ppc->MyPoplarPRI->OnRep_Perks(1, ppc->MyPoplarPRI->Perks[1]);
-                                ppc->MyPoplarPRI->OnRep_Perks(2, ppc->MyPoplarPRI->Perks[2]);
-                            }
-                        }
-                    }
-                }
-                else {
-                    std::cout << "[GAME] Failed to setup Augments!" << std::endl;
-                }
+            if (!Globals::amStandalone && !Globals::amServer) { // In theory should never happen outside of networked play, but I've been wrong before...
+                
             }
         }
         */
@@ -618,7 +551,7 @@ namespace Hooks {
             serverConvolveUFunction = UFunction::FindFunction("Function Engine.PlayerController.ServerProcessConvolve");
 
         if (Globals::netDriver && function == serverConvolveUFunction) {
-            printf("[NETWORKING] Setting up a player!\n");
+            printf("[NETWORKING] Setting up a player's gear!\n");
 
             APoplarPlayerController* ppc = reinterpret_cast<APoplarPlayerController*>(object);
             APlayerController_eventServerProcessConvolve_Params* parms = reinterpret_cast<APlayerController_eventServerProcessConvolve_Params*>(params);
@@ -630,10 +563,6 @@ namespace Hooks {
             nlohmann::json jsonObj = nlohmann::json::parse(joinParams);
 
             if (jsonObj["NEMA"] == true) { // Now you're in all of our matches :)
-                UPoplarPlayerNameIdentifierDefinition* playerClass = UObject::FindObject< UPoplarPlayerNameIdentifierDefinition>(jsonObj["playerClassNameIdentifier"]);
-
-                int playerLevel = jsonObj["playerLevel"];
-
                 UPoplarPerkFunction* perkOne = nullptr;
                 UPoplarPerkFunction* perkTwo = nullptr;
                 UPoplarPerkFunction* perkThree = nullptr;
@@ -647,48 +576,28 @@ namespace Hooks {
                 if (jsonObj.contains("perkThree"))
                     perkThree = UObject::FindObject< UPoplarPerkFunction>(jsonObj["perkThree"]);
 
-                std::string playerName = jsonObj["playerName"];
+                if (perkOne) {
+                    ppc->MyPoplarPRI->Perks[0].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(perkOne, Globals::GetGWorld());
+                    ppc->MyPoplarPRI->Perks[0].bActive = 1;
+                    ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
+                    ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkOne"]);
+                    ppc->MyPoplarPRI->OnRep_Perks(0, FReplicatedPerkItem());
+                }
 
-                std::wstring wName(playerName.begin(), playerName.end());
+                if (perkTwo) {
+                    ppc->MyPoplarPRI->Perks[1].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(perkTwo, Globals::GetGWorld());
+                    ppc->MyPoplarPRI->Perks[1].bActive = 1;
+                    ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
+                    ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkTwo"]);
+                    ppc->MyPoplarPRI->OnRep_Perks(1, FReplicatedPerkItem());
+                }
 
-                if (playerClass) {
-                    //ppc->eventServerSelectCharacter(playerClass, nullptr, nullptr, true);
-
-                    ppc->eventSwitchPoplarPlayerClass(playerClass);
-
-                    ppc->ServerRestartPlayer();
-
-                    if (perkOne) {
-                        ppc->MyPoplarPRI->Perks[0].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(perkOne, Globals::GetGWorld());
-                        ppc->MyPoplarPRI->Perks[0].bActive = 1;
-                        ppc->MyPoplarPRI->Perks[0].bCanUse = 1;
-                        ppc->MyPoplarPRI->Perks[0].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkOne"]);
-                    }
-
-                    if (perkTwo) {
-                        ppc->MyPoplarPRI->Perks[1].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(perkTwo, Globals::GetGWorld());
-                        ppc->MyPoplarPRI->Perks[1].bActive = 1;
-                        ppc->MyPoplarPRI->Perks[1].bCanUse = 1;
-                        ppc->MyPoplarPRI->Perks[1].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkTwo"]);
-                    }
-
-                    if (perkThree) {
-                        ppc->MyPoplarPRI->Perks[2].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(perkThree, Globals::GetGWorld());
-                        ppc->MyPoplarPRI->Perks[2].bActive = 1;
-                        ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
-                        ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkThree"]);
-                    }
-
-                    ppc->TestPerk.bActive = true;
-                    ppc->TestPerk.ItemLevel = playerLevel;
-
-                    /*
-                    ppc->ServerSetPlayerName(wName.c_str());
-                    ppc->MyPoplarPRI->PlayerName = FString(wName.c_str());
-                    ppc->MyPoplarPRI->PlayerNameHTML = FString(wName.c_str());
-                    ppc->MyPoplarPRI->PlayerNameTruncated = FString(wName.c_str());
-                    ppc->MyPoplarPRI->PlayerNameTruncatedHTML = FString(wName.c_str());
-                    */
+                if (perkThree) {
+                    ppc->MyPoplarPRI->Perks[2].PerkFunction = (UPoplarPerkFunction*)Engine::ScuffedDuplicateObject(perkThree, Globals::GetGWorld());
+                    ppc->MyPoplarPRI->Perks[2].bActive = 1;
+                    ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
+                    ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(jsonObj["perkThree"]);
+                    ppc->MyPoplarPRI->OnRep_Perks(2, FReplicatedPerkItem());
                 }
             }
 

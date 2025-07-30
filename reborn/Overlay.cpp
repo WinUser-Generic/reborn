@@ -18,8 +18,44 @@ namespace Overlay {
         Globals::DirectConnectOpen = true;
     }
 
+    void UpdateWaitingForPlayers() {
+        bool shouldExit = false;
+
+        while (!shouldExit && !Globals::SaveManagerOpen) {
+            GameCoordinator::RefreshWaitingForPlayers();
+
+            if (Globals::CurrentMatchEntry.MatchStarted) {
+                shouldExit = true;
+                Globals::DisplayWaitingForPlayers = false;
+            }
+            else {
+                Globals::DisplayWaitingForPlayers = true;
+            }
+
+            Sleep(2 * 1000);
+        }
+    }
+
     void StartLaunchSequence(const wchar_t* command) {
-        Engine::ExecConsoleCommand(command);
+        if (Globals::amStandalone) {
+            Globals::LaunchSequenceState = Globals::ELaunchSequenceState::CharacterSelect;
+            Globals::GearSlotOne = nullptr;
+            Globals::GearSlotTwo = nullptr;
+            Globals::GearSlotThree = nullptr;
+            Globals::CharacterSkin = nullptr;
+            Globals::CharacterTaunt = nullptr;
+            Globals::LaunchCommand = command;
+        }
+        else {
+            Engine::ExecConsoleCommand(command);
+
+            if (Globals::ConnectedToGameCoordinatorMatch) {
+                Globals::ConnectedToGameCoordinatorMatch = false;
+
+                std::thread t(UpdateWaitingForPlayers);
+                t.detach();
+            }
+        }
     }
 
     void OpenSoloVSAI() {
@@ -47,26 +83,10 @@ namespace Overlay {
         return "No Item";
     }
 
-    void UpdateWaitingForPlayers() {
-        bool shouldExit = false;
-
-        while (!shouldExit && !Globals::SaveManagerOpen) {
-            GameCoordinator::RefreshWaitingForPlayers();
-
-            if (Globals::CurrentMatchEntry.MatchStarted) {
-                shouldExit = true;
-                Globals::DisplayWaitingForPlayers = false;
-            }
-            else {
-                Globals::DisplayWaitingForPlayers = true;
-            }
-
-            Sleep(2 * 1000);
-        }
-    }
+    
 
     void UnfuckCharacterSelect(APoplarPlayerController* ppc, int characterSelectIDX) {
-        Sleep(1 * 1000);
+        Sleep(3 * 1000);
 
         Globals::CharacterSelectThisPossesionsTheRealOne = true;
 
@@ -75,11 +95,235 @@ namespace Overlay {
         ppc->ServerSetHasReceivedEntitlements();
         ppc->eventServerSelectCharacter(nullptr, nullptr, nullptr, true);
         ppc->ServerPlayerSelectClass(L"", L"");
-
-        
     }
 
     void Render() {
+        if (Globals::LaunchSequenceState > Globals::ELaunchSequenceState::NotOpen) {
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always);
+            ImGui::Begin("Launch Sequence", &Globals::SoloVSAIOpen, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+
+            ImGui::SetWindowFontScale(2.0f);
+
+            ImVec2 textSize;
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
+                textSize = ImGui::CalcTextSize("Select a Character");
+            }
+            else if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
+                textSize = ImGui::CalcTextSize("Select your Gear & Cosmetics");
+            }
+
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+
+            float centerX = (windowWidth - textSize.x) * 0.5f;
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerX);
+
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
+                ImGui::Text("Select a Character");
+            }
+            else if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
+                ImGui::Text("Select your Gear & Cosmetics");
+            }
+
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
+                for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characters.size(); i++) {
+                    const Metagame::Character& character = Globals::saveFiles[Globals::CurrentSaveFile].characters[i];
+                    if (ImGui::RadioButton((Constants::CharacterLookupTable.at(character.characterDisplayName) + " - Level " + std::to_string(character.level) + "/10").c_str(), character.characterDisplayName == Globals::selectedCharacter)) {
+                        Globals::selectedCharacter = character.characterDisplayName;
+                    };
+                }
+            }
+            else if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
+                ImGui::PushID("ItemSlotOne");
+
+                static std::string displayOne = "No Item";
+
+                displayOne = GetItemDisplayName(Globals::GearSlotOne);
+
+                if (ImGui::BeginCombo("Gear Slot One", displayOne.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+
+                    static std::string displayOneFilter = "";
+
+                    ImGui::InputText("Filter Gear", &displayOneFilter);
+
+                    if (ImGui::Selectable("No Item", Globals::GearSlotOne == nullptr)) {
+                        Globals::GearSlotOne = nullptr;
+                    }
+
+                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                        Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                        if (displayOneFilter.empty() || item.itemDisplayName.contains(displayOneFilter)) {
+                            if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotOne == &item)) {
+                                Globals::GearSlotOne = &item;
+                            }
+                            if (ImGui::IsItemHovered()) {
+                                ImGui::BeginTooltip();
+                                ImGui::Text(item.itemDisplayName.c_str());
+                                ImGui::Separator();
+                                ImGui::Text(item.itemFlavor.c_str());
+                                ImGui::EndTooltip();
+                            }
+                        }
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::PopID();
+
+                ImGui::PushID("ItemSlotTwo");
+
+                static std::string DisplayTwo = "No Item";
+
+                DisplayTwo = GetItemDisplayName(Globals::GearSlotTwo);
+
+                if (ImGui::BeginCombo("Gear Slot Two", DisplayTwo.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+
+                    static std::string displayTwoFilter = "";
+
+                    ImGui::InputText("Filter Gear", &displayTwoFilter);
+
+                    if (ImGui::Selectable("No Item", Globals::GearSlotTwo == nullptr)) {
+                        Globals::GearSlotTwo = nullptr;
+                    }
+
+                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                        Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                        if (displayTwoFilter.empty() || item.itemDisplayName.contains(displayTwoFilter)) {
+                            if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotTwo == &item)) {
+                                Globals::GearSlotTwo = &item;
+                            }
+                            if (ImGui::IsItemHovered()) {
+                                ImGui::BeginTooltip();
+                                ImGui::Text(item.itemDisplayName.c_str());
+                                ImGui::Separator();
+                                ImGui::Text(item.itemFlavor.c_str());
+                                ImGui::EndTooltip();
+                            }
+                        }
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::PopID();
+
+                ImGui::PushID("ItemSlotThree");
+
+                static std::string DisplayThree = "No Item";
+
+                DisplayThree = GetItemDisplayName(Globals::GearSlotThree);
+
+                if (ImGui::BeginCombo("Gear Slot Three", DisplayThree.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                    static std::string displayThreeFilter = "";
+
+                    ImGui::InputText("Filter Gear", &displayThreeFilter);
+
+                    if (ImGui::Selectable("No Item", Globals::GearSlotThree == nullptr)) {
+                        Globals::GearSlotThree = nullptr;
+                    }
+
+
+                    for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                        Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                        if (displayThreeFilter.empty() || item.itemDisplayName.contains(displayThreeFilter)) {
+                            if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotThree == &item)) {
+                                Globals::GearSlotThree = &item;
+                            }
+                            if (ImGui::IsItemHovered()) {
+                                ImGui::BeginTooltip();
+                                ImGui::Text(item.itemDisplayName.c_str());
+                                ImGui::Separator();
+                                ImGui::Text(item.itemFlavor.c_str());
+                                ImGui::EndTooltip();
+                            }
+                        }
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::PopID();
+
+                static std::string DisplaySkin = "Default Skin";
+
+                if (Globals::CharacterSkin) {
+                    DisplaySkin = Globals::CharacterSkin->skinDisplayName;
+                }
+
+                if (Globals::amStandalone) {
+                    ImGui::PushID("SkinSelect");
+
+                    if (ImGui::BeginCombo("Character Skin", DisplaySkin.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                        static std::string skinFilter = "";
+
+                        ImGui::InputText("Filter Skins", &skinFilter);
+
+                        if (ImGui::Selectable("Default Skin", Globals::CharacterSkin == nullptr)) {
+                            Globals::CharacterSkin = nullptr;
+                        }
+
+                        for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characterSkins.size(); i++) {
+                            Metagame::CharacterSkin& skin = Globals::saveFiles[Globals::CurrentSaveFile].characterSkins[i];
+
+                            if ((skinFilter.empty() || skin.skinDisplayName.contains(skinFilter)) && skin.characterName.contains(Globals::selectedCharacter)) {
+                                if (ImGui::Selectable(skin.skinDisplayName.c_str(), Globals::CharacterSkin == &skin)) {
+                                    Globals::CharacterSkin = &skin;
+                                }
+                            }
+                        }
+
+                        ImGui::EndCombo();
+                    }
+
+                    ImGui::PopID();
+                }
+            }
+
+            float availWidth = ImGui::GetContentRegionAvail().x;
+            float spacing = ImGui::GetStyle().ItemSpacing.x;
+            float buttonWidth = (availWidth - spacing) * 0.5f;
+
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::CharacterSelect) {
+                if (ImGui::Button("Close", ImVec2(buttonWidth, 0))) {
+                    Globals::LaunchSequenceState = Globals::ELaunchSequenceState::NotOpen;
+                }
+            }
+            else {
+                if (ImGui::Button("Back", ImVec2(buttonWidth, 0))) {
+                    Globals::LaunchSequenceState = (Globals::ELaunchSequenceState)(Globals::LaunchSequenceState - 1);
+                }
+            }
+
+            ImGui::SameLine();
+
+            if (Globals::LaunchSequenceState == Globals::ELaunchSequenceState::GearSelect) {
+                if (ImGui::Button("Start!", ImVec2(buttonWidth, 0))) {
+                    Globals::LaunchSequenceState = Globals::ELaunchSequenceState::NotOpen;
+                    std::cout << "[GAME] Entering the match!" << std::endl;
+                    Engine::ExecConsoleCommand(Globals::LaunchCommand);
+
+                    if (!Globals::amStandalone && Globals::ConnectedToGameCoordinatorMatch) {
+                        Globals::ConnectedToGameCoordinatorMatch = false;
+
+                        std::thread t(UpdateWaitingForPlayers);
+                        t.detach();
+                    }
+                }
+            }
+            else {
+                if (ImGui::Button("Next", ImVec2(buttonWidth, 0))) {
+                    Globals::LaunchSequenceState = (Globals::ELaunchSequenceState)(Globals::LaunchSequenceState + 1);
+                }
+            }
+
+            ImGui::End();
+        }
+
         if (Globals::CharacterSelectMenuOpen) {
             ImGui::Begin("Character & Gear Select", &Globals::CreateGameOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
 
@@ -103,6 +347,8 @@ namespace Overlay {
 
                                 ppc->ServerCharacterSelectInput(i);
 
+                                Globals::selectedCharacter = Metagame::ReverseCharacterLookup(Constants::CharacterSelectCharacterTable[i]);
+
                                 std::thread t(UnfuckCharacterSelect, ppc, i);
                                 t.detach();
                             }
@@ -111,8 +357,203 @@ namespace Overlay {
                         ImGui::EndTabItem();
                     }
                 }
-                if (ImGui::BeginTabItem("Gear Select")) {
-                    ImGui::EndTabItem();
+
+                if (!Globals::selectedCharacter.empty()) {
+                    if (ImGui::BeginTabItem("Gear Select")) {
+                        ImGui::PushID("ItemSlotOne");
+
+                        static std::string displayOne = "No Item";
+
+                        displayOne = GetItemDisplayName(Globals::GearSlotOne);
+
+                        if (ImGui::BeginCombo("Gear Slot One", displayOne.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+
+                            static std::string displayOneFilter = "";
+
+                            ImGui::InputText("Filter Gear", &displayOneFilter);
+
+                            if (ImGui::Selectable("No Item", Globals::GearSlotOne == nullptr)) {
+                                Globals::GearSlotOne = nullptr;
+                            }
+
+                            for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                                Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                                if (displayOneFilter.empty() || item.itemDisplayName.contains(displayOneFilter)) {
+                                    if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotOne == &item)) {
+                                        Globals::GearSlotOne = &item;
+                                    }
+                                    if (ImGui::IsItemHovered()) {
+                                        ImGui::BeginTooltip();
+                                        ImGui::Text(item.itemDisplayName.c_str());
+                                        ImGui::Separator();
+                                        ImGui::Text(item.itemFlavor.c_str());
+                                        ImGui::EndTooltip();
+                                    }
+                                }
+                            }
+
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::PopID();
+
+                        ImGui::PushID("ItemSlotTwo");
+
+                        static std::string DisplayTwo = "No Item";
+
+                        DisplayTwo = GetItemDisplayName(Globals::GearSlotTwo);
+
+                        if (ImGui::BeginCombo("Gear Slot Two", DisplayTwo.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+
+                            static std::string displayTwoFilter = "";
+
+                            ImGui::InputText("Filter Gear", &displayTwoFilter);
+
+                            if (ImGui::Selectable("No Item", Globals::GearSlotTwo == nullptr)) {
+                                Globals::GearSlotTwo = nullptr;
+                            }
+
+                            for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                                Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                                if (displayTwoFilter.empty() || item.itemDisplayName.contains(displayTwoFilter)) {
+                                    if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotTwo == &item)) {
+                                        Globals::GearSlotTwo = &item;
+                                    }
+                                    if (ImGui::IsItemHovered()) {
+                                        ImGui::BeginTooltip();
+                                        ImGui::Text(item.itemDisplayName.c_str());
+                                        ImGui::Separator();
+                                        ImGui::Text(item.itemFlavor.c_str());
+                                        ImGui::EndTooltip();
+                                    }
+                                }
+                            }
+
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::PopID();
+
+                        ImGui::PushID("ItemSlotThree");
+
+                        static std::string DisplayThree = "No Item";
+
+                        DisplayThree = GetItemDisplayName(Globals::GearSlotThree);
+
+                        if (ImGui::BeginCombo("Gear Slot Three", DisplayThree.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                            static std::string displayThreeFilter = "";
+
+                            ImGui::InputText("Filter Gear", &displayThreeFilter);
+
+                            if (ImGui::Selectable("No Item", Globals::GearSlotThree == nullptr)) {
+                                Globals::GearSlotThree = nullptr;
+                            }
+
+
+                            for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].items.size(); i++) {
+                                Metagame::Item& item = Globals::saveFiles[Globals::CurrentSaveFile].items[i];
+
+                                if (displayThreeFilter.empty() || item.itemDisplayName.contains(displayThreeFilter)) {
+                                    if (ImGui::Selectable(item.itemDisplayName.c_str(), Globals::GearSlotThree == &item)) {
+                                        Globals::GearSlotThree = &item;
+                                    }
+                                    if (ImGui::IsItemHovered()) {
+                                        ImGui::BeginTooltip();
+                                        ImGui::Text(item.itemDisplayName.c_str());
+                                        ImGui::Separator();
+                                        ImGui::Text(item.itemFlavor.c_str());
+                                        ImGui::EndTooltip();
+                                    }
+                                }
+                            }
+
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::PopID();
+
+                        ImGui::EndTabItem();
+                    }
+
+                    if (ImGui::BeginTabItem("Cosmetic Select")) {
+                        static std::string DisplayTaunt = "Default Taunt";
+
+                        if (Globals::CharacterTaunt) {
+                            DisplayTaunt = Globals::CharacterTaunt->tauntDisplayName;
+                        }
+
+                        ImGui::PushID("TauntSelect");
+
+                        if (ImGui::BeginCombo("Character Taunt", DisplayTaunt.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                            static std::string tauntFilter = "";
+
+                            ImGui::InputText("Filter Taunts", &tauntFilter);
+
+                            if (ImGui::Selectable("Default Taunt", Globals::CharacterTaunt == nullptr)) {
+                                Globals::CharacterTaunt = nullptr;
+                            }
+
+                            for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characterTaunts.size(); i++) {
+                                Metagame::CharacterTaunt& taunt = Globals::saveFiles[Globals::CurrentSaveFile].characterTaunts[i];
+
+                                if ((tauntFilter.empty() || taunt.tauntDisplayName.contains(tauntFilter)) && taunt.characterName.contains(Globals::selectedCharacter)) {
+                                    if (ImGui::Selectable(taunt.tauntDisplayName.c_str(), Globals::CharacterTaunt == &taunt)) {
+                                        Globals::CharacterTaunt = &taunt;
+
+                                        // We're on the client here, so we should only ever have one PPC (aside from the CDO), so this *shouldn't* break. TODO refactor tho
+                                        APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
+
+                                        ppc->eventServerSelectCharacterTaunt(UObject::FindObject<UPoplarMetaTauntDefinition>(taunt.tauntObjectName));
+                                    }
+                                }
+                            }
+
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::PopID();
+
+                        static std::string DisplaySkin = "Default Skin";
+
+                        if (Globals::CharacterSkin) {
+                            DisplaySkin = Globals::CharacterSkin->skinDisplayName;
+                        }
+
+                        ImGui::PushID("SkinSelect");
+
+                        if (ImGui::BeginCombo("Character Skin", DisplaySkin.c_str(), ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLarge)) {
+                            static std::string skinFilter = "";
+
+                            ImGui::InputText("Filter Skins", &skinFilter);
+
+                            if (ImGui::Selectable("Default Skin", Globals::CharacterSkin == nullptr)) {
+                                Globals::CharacterSkin = nullptr;
+                            }
+
+                            for (int i = 0; i < Globals::saveFiles[Globals::CurrentSaveFile].characterSkins.size(); i++) {
+                                Metagame::CharacterSkin& skin = Globals::saveFiles[Globals::CurrentSaveFile].characterSkins[i];
+
+                                if ((skinFilter.empty() || skin.skinDisplayName.contains(skinFilter)) && skin.characterName.contains(Globals::selectedCharacter)) {
+                                    if (ImGui::Selectable(skin.skinDisplayName.c_str(), Globals::CharacterSkin == &skin)) {
+                                        Globals::CharacterSkin = &skin;
+
+                                        // We're on the client here, so we should only ever have one PPC (aside from the CDO), so this *shouldn't* break. TODO refactor tho
+                                        APoplarPlayerController* ppc = SDKUtils::GetLastOfClass<APoplarPlayerController>();
+
+                                        ppc->eventServerSelectCharacterSkin(UObject::FindObject<UPoplarMetaSkinDefinition>(skin.skinObjectName));
+                                    }
+                                }
+                            }
+
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::PopID();
+
+                        ImGui::EndTabItem();
+                    }
                 }
 
                 ImGui::EndTabBar();

@@ -169,4 +169,6 @@ namespace Metagame {
     const std::string& GetCharacterObjectNameFromName(std::string& characterDisplayName);
 
     const Character& GetCharacterFromName(std::string& characterDisplayName);
+
+    std::string ReverseCharacterLookup(std::string characterName);
 }

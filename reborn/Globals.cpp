@@ -63,7 +63,7 @@ namespace Globals {
 
     bool didSendPreferencesToServer = false;
 
-    std::string selectedCharacter = "ModernSoldier";
+    std::string selectedCharacter = "";
 
     Metagame::Item* GearSlotOne = nullptr;
     Metagame::Item* GearSlotTwo = nullptr;
@@ -99,6 +99,8 @@ namespace Globals {
     bool CharacterSelectHasLockedIn = false;
 
     bool CharacterSelectThisPossesionsTheRealOne = false;
+
+    bool GearViewerOpen = false;
 
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);

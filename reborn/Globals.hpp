@@ -120,6 +120,8 @@ namespace Globals {
 
     extern bool CharacterSelectThisPossesionsTheRealOne;
 
+    extern bool GearViewerOpen;
+
     namespace Telemetry {
         extern std::mutex TickrateMutex;
 
