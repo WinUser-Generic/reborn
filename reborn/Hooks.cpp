@@ -398,39 +398,6 @@ namespace Hooks {
         }
         */
 
-        static UFunction* overriddenClientSetScoreboardData = nullptr;
-
-        if (!overriddenClientSetScoreboardData)
-            overriddenClientSetScoreboardData = UFunction::FindFunction("Function Engine.PlayerController.ClientSetProgressMessage");
-
-        if (!Globals::amServer && !Globals::amStandalone && function == overriddenClientSetScoreboardData) {
-            APlayerController_eventClientSetProgressMessage_Params* parms = reinterpret_cast<APlayerController_eventClientSetProgressMessage_Params*>(params);
-
-            UPoplarScoreboardGFxMovie* scoreboard = SDKUtils::GetLastOfClass<UPoplarScoreboardGFxMovie>();
-
-            
-
-            std::wstring wJsonStr = std::wstring(parms->Message.c_str());
-
-            std::string jsonStr = std::string(wJsonStr.begin(), wJsonStr.end());
-
-            nlohmann::json jsonObj = nlohmann::json::parse(jsonStr);
-
-            for (FPlayerDetailInfo detail : scoreboard->CachedPlayerInfo) {
-                std::string playerName = jsonObj[std::to_string(detail.UniqueId.RawId[0])];
-
-                std::wstring wPlayerName = std::wstring(playerName.begin(), playerName.end());
-
-                std::cout << playerName << std::endl;
-
-                detail.PlayerNameHTML = wcsdup(wPlayerName.c_str()); // TODO: yeah I know
-            }
-
-            std::cout << scoreboard->CachedPlayerInfo.size() << std::endl;
-
-            return;
-        }
-
         static UFunction* characterSelectUFunction = nullptr;
 
         if (!characterSelectUFunction)
@@ -659,18 +626,6 @@ namespace Hooks {
                                 ppc->MyPoplarPRI->Perks[2].bCanUse = 1;
                                 ppc->MyPoplarPRI->Perks[2].Rarity = GameUtils::RarityStringToRarity(ppc->MyPoplarPRI->Perks[2].PerkFunction->GetFullName());
                             }
-
-                            nlohmann::json jsonObj = nlohmann::json();
-
-                            for (const auto& serverPlayer : Globals::ServerPlayers) {
-                                jsonObj[std::to_string(serverPlayer.UniqueId)] = serverPlayer.Name;
-                            }
-
-                            std::string jsonString = jsonObj.dump();
-
-                            std::wstring wJsonString = std::wstring(jsonString.begin(), jsonString.end());
-
-                            ppc->eventClientSetProgressMessage(EProgressMessageType::PMT_END, wJsonString.c_str(), L"", false);
                         }
                     }
                 }
