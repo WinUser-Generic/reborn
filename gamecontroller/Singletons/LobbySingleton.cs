@@ -89,11 +89,11 @@ namespace gamecontroller.Singletons
 			}
 		}
 
-		public void RemovePlayerFromAllLobbies(Guid PlayerGuid, WebSocket webSocket)
+		public void RemovePlayerFromAllLobbies(Guid PlayerGuid)
 		{
 			foreach (Lobby lobby in Lobbies.Where(e => e.LobbyPlayers.Where(x => x.Guid == PlayerGuid).Any()))
 			{
-				lobby.RemovePlayer(PlayerGuid, webSocket);
+				lobby.RemovePlayer(PlayerGuid);
 			}
 		}
 

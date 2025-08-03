@@ -18,10 +18,38 @@ public class SessionCleanupService : BackgroundService
 	{
 		while (!stoppingToken.IsCancellationRequested)
 		{
+			CleanupPlayers();
+			CleanupLobbies();
 			CleanupSessions();
 
 			await Task.Delay(5000, stoppingToken);
 		}
+	}
+
+	private void CleanupPlayers()
+	{
+		foreach(Lobby lobby in _lobbySingleton.Lobbies)
+		{
+			List<LobbyPlayer> playersToRemove = new List<LobbyPlayer>();
+
+			foreach (LobbyPlayer lobbyPlayer in lobby.LobbyPlayers)
+			{
+				if((DateTime.UtcNow - lobbyPlayer.JoinedAt).TotalSeconds > 60 && lobbyPlayer.WebSocket == null)
+				{
+					playersToRemove.Add(lobbyPlayer);
+				}
+			}
+
+			foreach (LobbyPlayer lobbyPlayer in playersToRemove)
+			{
+				lobby.RemovePlayer(lobbyPlayer.Guid);
+			}
+		}
+	}
+
+	private void CleanupLobbies()
+	{
+		_lobbySingleton.Lobbies.RemoveAll(e => (DateTime.UtcNow - e.LobbyCreatedAt).TotalSeconds > 60 && e.LobbyPlayers.Count == 0);
 	}
 
 	private void CleanupSessions()

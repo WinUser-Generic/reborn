@@ -26,6 +26,8 @@ namespace gamecontroller.Services
 					await SendDirtyLobbyStates();
 					await SendDirtyChatMessages();
 					await SendJoinMessages();
+
+					await Task.Delay(100);
 				}
 				catch (OperationCanceledException)
 				{

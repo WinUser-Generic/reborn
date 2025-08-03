@@ -47,7 +47,7 @@ namespace gamecontroller.Services
 							"Closing",
 							CancellationToken.None);
 
-						_lobbySingleton.RemovePlayerFromAllLobbies(PlayerGuid, webSocket);
+						_lobbySingleton.RemovePlayerFromAllLobbies(PlayerGuid);
 
 						break;
 					}

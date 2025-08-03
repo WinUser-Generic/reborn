@@ -28,8 +28,12 @@ namespace gamecontroller.Models
 
 		public WebSocket? WebSocket;
 
+		public DateTime JoinedAt { get; set; }
+
 		public LobbyPlayer(HttpContext context)
 		{
+			JoinedAt = DateTime.UtcNow;
+
 			Guid = (context.Items["guid"] as Guid?).Value;
 			Name = context.Items["name"] as string;
 
@@ -56,14 +60,14 @@ namespace gamecontroller.Models
 		public string LobbyName { get; set; }
 		public List<string> LobbyTags { get; set; }
 		public string? LobbyPassword { get; set; }
-		public string HostPlayerGuid { get; set; }
+		public string HostPlayerGuid;
 	}
 
 	public class LobbyJoinConfig
 	{
-		public string LobbyGuid;
-		public string? Password;
-	}
+		public string LobbyGuid { get; set; }
+		public string? LobbyPassword { get; set; }
+    }
 
 	public class Lobby {
 		public Guid Guid { get; set; }
@@ -87,6 +91,8 @@ namespace gamecontroller.Models
 		public int PlayerIndexToAllowJoin;
 
 		public bool AllowJoin;
+
+		public DateTime LobbyCreatedAt { get; set; }
 
 		public Lobby(LobbyCreationConfig config)
 		{
@@ -115,6 +121,8 @@ namespace gamecontroller.Models
 
 			AllowJoin = false;
 			PlayerIndexToAllowJoin = -1;
+
+			LobbyCreatedAt = DateTime.UtcNow;
 		}
 
 		public void HandleChatMessage(Guid playerGuid, WebsocketChatMessage websocketChatMessage)
@@ -204,7 +212,7 @@ namespace gamecontroller.Models
 			}
 		}
 
-		public void RemovePlayer(Guid playerGuid, WebSocket webSocket)
+		public void RemovePlayer(Guid playerGuid)
 		{
 			LobbyPlayer? playerRemoved = LobbyPlayers.Where(e => e.Guid == playerGuid).FirstOrDefault();
 

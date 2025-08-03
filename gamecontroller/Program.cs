@@ -24,6 +24,8 @@ builder.Services.AddHostedService<SessionCleanupService>();
 
 builder.Services.AddHostedService<MatchLaunchService>();
 
+builder.Services.AddHostedService<WebsocketOutgoingService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

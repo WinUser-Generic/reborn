@@ -37,7 +37,9 @@ namespace gamecontroller.Controllers
 
 			if (HttpContext.Items["guid"] is Guid)
 			{
-				if (!_lobbySingleton.PlayerHasAnyOtherLobbies(HttpContext.Items["guid"] as Guid?) && !_lobbySingleton.PlayerIsInAnyLobbies(HttpContext.Items["guid"] as Guid?))
+				config.HostPlayerGuid = HttpContext.Items["guid"].ToString();
+
+                if (!_lobbySingleton.PlayerHasAnyOtherLobbies(HttpContext.Items["guid"] as Guid?) && !_lobbySingleton.PlayerIsInAnyLobbies(HttpContext.Items["guid"] as Guid?))
 				{
 					return _lobbySingleton.CreateLobby(config);
 				}
@@ -68,7 +70,7 @@ namespace gamecontroller.Controllers
 
 			if (lobby.Password != null)
 			{
-				if (!lobby.Password.Equals(config.Password))
+				if (lobby.Password != config.LobbyPassword)
 				{
 					return Unauthorized();
 				}
