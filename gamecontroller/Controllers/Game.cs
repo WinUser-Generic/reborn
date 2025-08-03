@@ -6,6 +6,8 @@ using gamecontroller.Models;
 
 namespace gamecontroller.Controllers
 {
+    // TODO: Refactor this whole thing, clients used to hit here but no longer, so this should be refactored to reflect it's server only nature
+
     [ApiController]
     [Route("api/games")]
     public class Game : ControllerBase
@@ -81,6 +83,21 @@ namespace gamecontroller.Controllers
 
             HttpContext.Response.StatusCode = 401;
             return;
+        }
+
+        [HttpPost("server-poll")]
+        public void ServerPoll()
+        {
+            if (HttpContext.Request.Headers.TryGetValue("X-Server-Token", out var authHeader))
+            {
+                foreach (Lobby lobby in _lobbySingleton.Lobbies)
+                {
+                    if (lobby.GameInstance != null && lobby.GameInstance.MyGuid.Equals(authHeader))
+                    {
+                        lobby.GameInstance.LastServerCheckIn = DateTime.UtcNow;
+                    }
+                }
+            }
         }
     }
 }
