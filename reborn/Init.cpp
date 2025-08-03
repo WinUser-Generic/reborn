@@ -25,12 +25,12 @@ namespace Init {
     void Hooks() {
         if (Globals::amServer) {
             Hooks::DestroyActor = safetyhook::create_inline((void*)(Globals::baseAddress + 0x3EF070), &Hooks::DestroyActorHook);
-            Hooks::PoplarGameInfoSetup = safetyhook::create_inline((void*)(Globals::baseAddress + 0x1474140), &Hooks::PoplarGameInfoSetupHook);
             Hooks::WorldControlMessage = safetyhook::create_inline((void*)(Globals::baseAddress + 0x045c540), &Hooks::WorldControlMessageHook);
+            Hooks::PoplarGameInfoSetup = safetyhook::create_inline((void*)(Globals::baseAddress + 0x1474140), &Hooks::PoplarGameInfoSetupHook);
+            Hooks::StaticConstructObject = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8C050), &Hooks::StaticConstructObjectHook);
             Hooks::ServerCinematicCrashHook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c4780), &Hooks::ServerCinematicCrash);
             Hooks::ServerCinematicCrash2Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c69f0), &Hooks::ServerCinematicCrash2);
             Hooks::ServerCinematicCrash3Hook = safetyhook::create_inline((void*)(Globals::baseAddress + 0x2c74f0), &Hooks::ServerCinematicCrash3);
-            Hooks::StaticConstructObject = safetyhook::create_inline((void*)(Globals::baseAddress + 0x8C050), &Hooks::StaticConstructObjectHook);
             Hooks::BeginDestroy = safetyhook::create_inline((void*)(Globals::baseAddress + 0x74E80), &Hooks::BeginDestroyHook);
         }
         else {

@@ -398,6 +398,31 @@ namespace Hooks {
         }
         */
 
+        static UFunction* initOpsUFunction = nullptr;
+
+        if (!initOpsUFunction)
+            initOpsUFunction = UFunction::FindFunction("Function PoplarGame.PoplarStatReplicationInfo.InitializeChallenges");
+
+        if ((Globals::amServer || Globals::amStandalone) && function == initOpsUFunction) {
+            for (UInstancedDesignerAttribute* DesignerAttribute : SDKUtils::GetAllOfClass< UInstancedDesignerAttribute>()) {
+                /*GD_GameTypes_Operations.Buffs.Att_Operations_NarrativePlaythrough
+GD_Balance_Operations.Attributes.Att_Operations_OpPoints*/
+                if (DesignerAttribute->DesignerAttributeDefinitionPathName.ToString().contains("GD_GameTypes_Operations.Buffs.Att_Operations_NarrativePlaythrough")) {
+                    std::cout << "found playthrough def!" << std::endl;
+
+                    DesignerAttribute->Value = 2.0f;
+                    DesignerAttribute->IntValue = 2;
+                }
+                if (DesignerAttribute->DesignerAttributeDefinitionPathName.ToString().contains("GD_Balance_Operations.Attributes.Att_Operations_OpPoints")) {
+                    std::cout << "found ops def!" << std::endl;
+
+                    DesignerAttribute->Value = 69.0f;
+                    DesignerAttribute->IntValue = 69;
+                }
+                std::cout << DesignerAttribute->DesignerAttributeDefinitionPathName.ToString() << std::endl;
+            }
+        }
+
         static UFunction* characterSelectUFunction = nullptr;
 
         if (!characterSelectUFunction)
@@ -788,9 +813,8 @@ namespace Hooks {
         __int64 a8,
         __int64 a9) {
         UObject* ret = StaticConstructObject.call<UObject*>(a1, a2, a3, a4, a5, a6, a7, a8, a9);
-
  
-        if (Globals::netDriver && ret && ret->IsA<AActor>()) {
+        if (Globals::amServer && Globals::netDriver && ret && ret->IsA<AActor>()) {
                     std::scoped_lock t(Globals::NetworkObjectListMutex);
 
                     Globals::NetworkObjectList.push_back((AActor*)ret);
@@ -832,7 +856,43 @@ namespace Hooks {
             a1->EffectiveNumPlayers = ServerSettings::NumPlayersToStart;
         }
 
+        for (UInstancedDesignerAttribute* DesignerAttribute : SDKUtils::GetAllOfClass< UInstancedDesignerAttribute>()) {
+            /*GD_GameTypes_Operations.Buffs.Att_Operations_NarrativePlaythrough
+GD_Balance_Operations.Attributes.Att_Operations_OpPoints*/
+            if (DesignerAttribute->DesignerAttributeDefinitionPathName.ToString().contains("GD_GameTypes_Operations.Buffs.Att_Operations_NarrativePlaythrough")) {
+                std::cout << "found playthrough def!" << std::endl;
+
+                DesignerAttribute->Value = 2.0f;
+                DesignerAttribute->IntValue = 2;
+            }
+            if (DesignerAttribute->DesignerAttributeDefinitionPathName.ToString().contains("GD_Balance_Operations.Attributes.Att_Operations_OpPoints")) {
+                std::cout << "found ops def!" << std::endl;
+
+                DesignerAttribute->Value = 69.0f;
+                DesignerAttribute->IntValue = 69;
+            }
+            std::cout << DesignerAttribute->DesignerAttributeDefinitionPathName.ToString() << std::endl;
+        }
+
         __int64 ret = PoplarGameInfoSetup.call<__int64>(a1, a2);
+
+        for (UInstancedDesignerAttribute* DesignerAttribute : SDKUtils::GetAllOfClass< UInstancedDesignerAttribute>()) {
+            /*GD_GameTypes_Operations.Buffs.Att_Operations_NarrativePlaythrough
+GD_Balance_Operations.Attributes.Att_Operations_OpPoints*/
+            if (DesignerAttribute->DesignerAttributeDefinitionPathName.ToString().contains("GD_GameTypes_Operations.Buffs.Att_Operations_NarrativePlaythrough")) {
+                std::cout << "found playthrough def!" << std::endl;
+
+                DesignerAttribute->Value = 3.0f;
+                DesignerAttribute->IntValue = 3;
+            }
+            if (DesignerAttribute->DesignerAttributeDefinitionPathName.ToString().contains("GD_Balance_Operations.Attributes.Att_Operations_OpPoints")) {
+                std::cout << "found ops def!" << std::endl;
+
+                DesignerAttribute->Value = 69.0f;
+                DesignerAttribute->IntValue = 69;
+            }
+            std::cout << DesignerAttribute->DesignerAttributeDefinitionPathName.ToString() << std::endl;
+        }
 
         if (Globals::amServer && !Globals::GetGWorld()->GetFullName().contains("MenuMap")) {
             a1->NumPlayers = ServerSettings::NumPlayersToStart;
