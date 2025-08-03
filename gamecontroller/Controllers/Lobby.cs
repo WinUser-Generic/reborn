@@ -95,7 +95,7 @@ namespace gamecontroller.Controllers
 
 			WebSocket ws = await HttpContext.WebSockets.AcceptWebSocketAsync();
 
-			lobby.AddWebsocket(ws);
+			lobby.AddWebsocket((HttpContext.Items["guid"] as Guid?).Value, ws);
 
 			return Ok();
 		}

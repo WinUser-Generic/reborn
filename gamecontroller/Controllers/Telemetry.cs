@@ -26,6 +26,7 @@ namespace gamecontroller.Controllers
 		[HttpPost("event")]
 		public async Task<StatusCodeResult> TelemetryEvent([FromBody] TelemetryEvent Event)
 		{
+			/*
 			if (HttpContext.Request.Headers.TryGetValue("X-Server-Token", out var authHeader))
 			{
 				foreach (GameInstance instance in _gameSessions.gameInstances)
@@ -51,13 +52,17 @@ namespace gamecontroller.Controllers
 					}
 				}
 			}
+			*/
 
-			return Unauthorized();
+			// TODO: unfuck this after refactor
+
+			return Ok();
 		}
 
 		[HttpPost("snapshot")]
 		public async Task<StatusCodeResult> TelemetrySnapshot([FromBody] TelemetrySnapshot Snapshot)
 		{
+			/*
 			if (HttpContext.Request.Headers.TryGetValue("X-Server-Token", out var authHeader))
 			{
 				foreach (GameInstance instance in _gameSessions.gameInstances)
@@ -85,9 +90,12 @@ namespace gamecontroller.Controllers
 					}
 				}
 			}
+			*/
 
-			return Unauthorized();
-		}
+            // TODO: unfuck this after refactor
+
+            return Ok();
+        }
 
 		[HttpGet]
 		public async Task<List<TelemetryMatchLogs>> GetTelemetry()

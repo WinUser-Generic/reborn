@@ -28,17 +28,10 @@ public class SessionCleanupService : BackgroundService
 	{
 		foreach (Lobby lobby in _lobbySingleton.Lobbies)
 		{
-			if(lobby.GameInstance != null && (DateTime.UtcNow - lobby.GameInstance.LastServerCheckIn).TotalSeconds > 10)
+			if(lobby.GameInstance != null && (DateTime.UtcNow - lobby.GameInstance.LastServerCheckIn).TotalSeconds > 20)
 			{
-
+				lobby.MatchShutdown();
 			}
 		}
-
-		_gameSessions.gameInstances.RemoveAll(instance =>
-		{
-			Console.WriteLine(instance.LastUpdateTime);
-			return instance.LastUpdateTime.HasValue &&
-				   (DateTime.UtcNow - instance.LastUpdateTime.Value).TotalSeconds > 10;
-		});
 	}
 }
