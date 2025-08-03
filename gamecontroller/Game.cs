@@ -110,9 +110,24 @@ namespace gamecontroller
 
     public class GameInstance
     {
+        public string MyGuid;
         public int PID { get; set; }
         public string ConnectionString { get; set; }
         public int Port { get; set; }
+        public GameCreationConfig Config { get; set; }
+        public DateTime LastServerCheckIn { get; set; }
+        public DateTime CreationTime { get; set; }
+
+        public GameInstance()
+        {
+            MyGuid = Guid.NewGuid().ToString();
+            CreationTime = DateTime.UtcNow;
+        }
+    }
+
+    public class AllowPlayerJoin
+    {
+        public int PlayerIndex { get; set; }
     }
 
     public class GameCreationConfig
@@ -133,7 +148,16 @@ namespace gamecontroller
             this.HumanReadableInstanceMapMode = lobby.HumanReadableMapModeName; // validated by launch reqs
             this.ServerStartupCommand = lobby.ServerStartString; // validated by launch reqs
 
-			PlayerConfigs = lobby.LobbyPlayers.Select(e => new PlayerConfig(e)).ToList();
+            //PlayerConfigs = lobby.LobbyPlayers.Select(e => new PlayerConfig(e)).ToList();
+
+            // Why not the above? I'm not sure if the above preserves list order, and this is VITAL for ensuring players actually get what they picked
+
+            PlayerConfigs = new List<PlayerConfig>();
+
+            for(int i = 0; i < lobby.LobbyPlayers.Count; i++)
+            {
+                PlayerConfigs.Add(new PlayerConfig(lobby.LobbyPlayers[i]));
+            }
 
 			this.MaxNumPlayers = PlayerConfigs.Count;
 		}

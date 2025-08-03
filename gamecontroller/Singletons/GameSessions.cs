@@ -1,4 +1,5 @@
 ﻿using gamecontroller.Models;
+using System.Diagnostics;
 
 namespace gamecontroller.Singletons
 {
@@ -39,9 +40,41 @@ namespace gamecontroller.Singletons
 			return retPorts;
 		}
 
-		public async Task LaunchNewGame(GameCreationConfig config)
+        private async Task<string> GetPublicIp()
+        {
+            HttpClient httpClient = new HttpClient();
+
+            var response = await httpClient.GetAsync("https://checkip.amazonaws.com");
+
+            return (await response.Content.ReadAsStringAsync()).Replace("\n", "");
+        }
+
+        public async Task LaunchNewGame(Lobby lobbyToLaunch)
 		{
-			 
+			GameCreationConfig config = new GameCreationConfig(lobbyToLaunch);
+
+			string ip = await GetPublicIp();
+
+			int port = GetAvailablePorts().FirstOrDefault();
+
+			if(port != 0)
+			{
+				GameInstance gameInstance = new GameInstance();
+
+				gameInstance.Port = port;
+
+				var proc = Process.Start(new ProcessStartInfo("Serverborn.exe", "-SEEKFREEPACKAGEMAP -SEEKFREELOADINGPCCONSOLE GameCoordinator localhost:5000 "+gameInstance.MyGuid.ToString()));
+
+				gameInstance.PID = proc.Id;
+
+				gameInstance.ConnectionString = "open " + await GetPublicIp() + ":" + port.ToString();
+
+				gameInstance.Config = config;
+
+				lobbyToLaunch.GameInstance = gameInstance;
+
+				lobbyToLaunch.ServerLaunching();
+			}
 		}
 	}
 }

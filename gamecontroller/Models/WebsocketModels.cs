@@ -12,6 +12,11 @@
 		}
 	}
 
+	public class WebsocketJoinMessage
+	{
+		public string IpToJoin { get; set; }
+	}
+
 	public class WebsocketChatMessage
 	{
 		public string Message { get; set; }

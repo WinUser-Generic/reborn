@@ -26,6 +26,8 @@ namespace gamecontroller.Models
 		public string? GearSlotTwoObjectName { get; set; }
 		public string? GearSlotThreeObjectName { get; set; }
 
+		public WebSocket? WebSocket;
+
 		public LobbyPlayer(HttpContext context)
 		{
 			Guid = (context.Items["guid"] as Guid?).Value;
@@ -39,7 +41,8 @@ namespace gamecontroller.Models
 	{
 		PreGame = 0,
 		WaitingForServer = 1,
-		InGame = 2,
+		ServerLaunching = 2,
+		InGame = 3,
 	}
 
 	public enum EMode
@@ -74,13 +77,16 @@ namespace gamecontroller.Models
 		public List<LobbyPlayer> LobbyPlayers { get; set; }
 		public string? HumanReadableMapModeName { get; set; }
 		public string? ServerStartString { get; set; }
-		public List<WebSocket> WebSockets;
 		public bool Dirty;
 
 		public List<ChatMessage> ChatMessages;
 		public bool ChatMessagesDirty;
 
 		public GameInstance? GameInstance;
+
+		public int PlayerIndexToAllowJoin;
+
+		public bool AllowJoin;
 
 		public Lobby(LobbyCreationConfig config)
 		{
@@ -106,6 +112,9 @@ namespace gamecontroller.Models
 			ChatMessages = new List<ChatMessage>();
 
 			ChatMessagesDirty = false;
+
+			AllowJoin = false;
+			PlayerIndexToAllowJoin = -1;
 		}
 
 		public void HandleChatMessage(Guid playerGuid, WebsocketChatMessage websocketChatMessage)
@@ -197,8 +206,6 @@ namespace gamecontroller.Models
 
 		public void RemovePlayer(Guid playerGuid, WebSocket webSocket)
 		{
-			WebSockets.Remove(webSocket);
-
 			LobbyPlayer? playerRemoved = LobbyPlayers.Where(e => e.Guid == playerGuid).FirstOrDefault();
 
 			if(LobbyPlayers.RemoveAll(e => e.Guid == playerGuid) > 0)
@@ -219,9 +226,15 @@ namespace gamecontroller.Models
 			ChatMessagesDirty = true;
 		}
 
-		public void AddWebsocket(WebSocket webSocket)
+		public void AddWebsocket(Guid playerGuid, WebSocket webSocket)
 		{
-			WebSockets.Add(webSocket);
+			foreach (var player in LobbyPlayers)
+			{
+				if(player.Guid == playerGuid)
+				{
+					player.WebSocket = webSocket;
+				}
+			}
 		}
 
 		public int GetNumPlayersOnTeam(ETeam team)
@@ -245,6 +258,26 @@ namespace gamecontroller.Models
 				Dirty = true;
 			}
 		}
+
+		public void ServerLaunching()
+		{
+			State = ELobbyState.ServerLaunching;
+
+            AddSystemChatMessage("Server found! Launching game...");
+
+            Dirty = true;
+		}
+
+		public void MatchShutdown()
+		{
+			State = ELobbyState.PreGame;
+
+            AddSystemChatMessage("Match complete!");
+
+			GameInstance = null;
+
+			Dirty = true;
+        }
 
 		public bool AddPlayerAndAssignToTeam(HttpContext context)
 		{

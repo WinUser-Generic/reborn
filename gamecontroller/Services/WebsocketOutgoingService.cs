@@ -25,6 +25,7 @@ namespace gamecontroller.Services
 				{
 					await SendDirtyLobbyStates();
 					await SendDirtyChatMessages();
+					await SendJoinMessages();
 				}
 				catch (OperationCanceledException)
 				{
@@ -45,17 +46,22 @@ namespace gamecontroller.Services
 				{
 					lobby.Dirty = false;
 
-					foreach (WebSocket ws in lobby.WebSockets)
+					foreach (LobbyPlayer player in lobby.LobbyPlayers)
 					{
-						string lobbyPayload = JsonSerializer.Serialize(lobby);
+						WebSocket? ws = player.WebSocket;
 
-						WebsocketMessage message = new WebsocketMessage("LobbyUpdate", lobbyPayload); // TODO: JSON in JSON? what is this, phx labs?
+						if (ws != null)
+                        {
+                            string lobbyPayload = JsonSerializer.Serialize(lobby);
 
-						string messagePayload = JsonSerializer.Serialize(message);
+                            WebsocketMessage message = new WebsocketMessage("LobbyUpdate", lobbyPayload); // TODO: JSON in JSON? what is this, phx labs?
 
-						byte[] bytes = Encoding.UTF8.GetBytes(messagePayload);
+                            string messagePayload = JsonSerializer.Serialize(message);
 
-						await ws.SendAsync(bytes, WebSocketMessageType.Text, true, _cancellationTokenSource.Token);
+                            byte[] bytes = Encoding.UTF8.GetBytes(messagePayload);
+
+                            await ws.SendAsync(bytes, WebSocketMessageType.Text, true, _cancellationTokenSource.Token);
+                        }
 					}
 				}
 			}
@@ -69,17 +75,22 @@ namespace gamecontroller.Services
 				{
 					lobby.ChatMessagesDirty = false;
 
-					foreach(WebSocket ws in lobby.WebSockets)
-					{
-						string chatPayload = JsonSerializer.Serialize(lobby.ChatMessages);
+                    foreach (LobbyPlayer player in lobby.LobbyPlayers)
+                    {
+                        WebSocket? ws = player.WebSocket;
 
-						WebsocketMessage message = new WebsocketMessage("Chat", chatPayload);
+						if (ws != null)
+						{
+							string chatPayload = JsonSerializer.Serialize(lobby.ChatMessages);
 
-						string messagePayload = JsonSerializer.Serialize(message);
+							WebsocketMessage message = new WebsocketMessage("Chat", chatPayload);
 
-						byte[] bytes = Encoding.UTF8.GetBytes(messagePayload);
+							string messagePayload = JsonSerializer.Serialize(message);
 
-						await ws.SendAsync(bytes, WebSocketMessageType.Text, true, _cancellationTokenSource.Token);
+							byte[] bytes = Encoding.UTF8.GetBytes(messagePayload);
+
+							await ws.SendAsync(bytes, WebSocketMessageType.Text, true, _cancellationTokenSource.Token);
+						}
 					}
 
 					lobby.ChatMessages.Clear();
@@ -87,9 +98,34 @@ namespace gamecontroller.Services
 			}
 		}
 
-		private async Task HandleClientMessages()
+		private async Task SendJoinMessages()
 		{
-			
+			foreach (Lobby lobby in _lobbySingleton.Lobbies)
+			{
+				if (lobby.AllowJoin)
+				{
+					lobby.AllowJoin = false;
+
+					LobbyPlayer player = lobby.LobbyPlayers[lobby.PlayerIndexToAllowJoin];
+
+					WebsocketJoinMessage joinMessage = new WebsocketJoinMessage
+					{
+						IpToJoin = lobby.GameInstance.ConnectionString
+					};
+
+					string joinPayload = JsonSerializer.Serialize(joinMessage);
+
+                    WebsocketMessage message = new WebsocketMessage("Join", joinPayload);
+
+                    string messagePayload = JsonSerializer.Serialize(message);
+
+                    byte[] bytes = Encoding.UTF8.GetBytes(messagePayload);
+
+					if (player.WebSocket != null) {
+						await player.WebSocket.SendAsync(bytes, WebSocketMessageType.Text, true, _cancellationTokenSource.Token);
+					}
+				}
+			}
 		}
 	}
 }

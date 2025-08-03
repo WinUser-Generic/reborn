@@ -1,16 +1,17 @@
-﻿using gamecontroller.Singletons;
+﻿using gamecontroller.Models;
+using gamecontroller.Singletons;
 using Microsoft.Extensions.Hosting;
 using System.Diagnostics;
 
 public class SessionCleanupService : BackgroundService
 {
 	private readonly ILogger<SessionCleanupService> _logger;
-	private readonly GameSessions _gameSessions;
+	private readonly LobbySingleton _lobbySingleton;
 
-	public SessionCleanupService(ILogger<SessionCleanupService> logger, GameSessions gameSessions)
+	public SessionCleanupService(ILogger<SessionCleanupService> logger, LobbySingleton lobbySingleton)
 	{
 		_logger = logger;
-		_gameSessions = gameSessions;
+		_lobbySingleton = lobbySingleton;
 	}
 
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -25,21 +26,11 @@ public class SessionCleanupService : BackgroundService
 
 	private void CleanupSessions()
 	{
-		foreach(var instance in _gameSessions.gameInstances)
+		foreach (Lobby lobby in _lobbySingleton.Lobbies)
 		{
-			if(instance.LastUpdateTime.HasValue && (DateTime.UtcNow - instance.LastUpdateTime).Value.Seconds > 10)
+			if(lobby.GameInstance != null && (DateTime.UtcNow - lobby.GameInstance.LastServerCheckIn).TotalSeconds > 10)
 			{
-				/*
-				if (instance.PID.HasValue)
-				{
-					Process? process = Process.GetProcessById(instance.PID.Value);
 
-					if(process != null && !process.HasExited)
-					{
-						process.Kill();
-					}
-				}
-				*/
 			}
 		}
 

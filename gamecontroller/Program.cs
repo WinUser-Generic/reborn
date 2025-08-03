@@ -22,6 +22,8 @@ builder.Services.AddSingleton<StinkyWordService>();
 
 builder.Services.AddHostedService<SessionCleanupService>();
 
+builder.Services.AddHostedService<MatchLaunchService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
