@@ -122,6 +122,7 @@ namespace gamecontroller
         {
             MyGuid = Guid.NewGuid().ToString();
             CreationTime = DateTime.UtcNow;
+            LastServerCheckIn = DateTime.UtcNow;
         }
     }
 
