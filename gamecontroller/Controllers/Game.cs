@@ -3,6 +3,7 @@ using gamecontroller.Middleware;
 using System.Diagnostics;
 using gamecontroller.Singletons;
 
+/*
 namespace gamecontroller.Controllers
 {
     [ApiController]
@@ -139,3 +140,4 @@ namespace gamecontroller.Controllers
         }
     }
 }
+*/

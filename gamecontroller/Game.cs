@@ -1,3 +1,4 @@
+using gamecontroller.Models;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -84,63 +85,34 @@ namespace gamecontroller
         public int MemoryUsageMB { get; set; }
     }
 
-    public class ServerPollUpdate
+    public class PlayerConfig
     {
-		public int ConnectedPlayers { get; set; }
+        public string Name { get; set; }
+        public int TeamId { get; set; }
+        public string CharacterObjectName { get; set; }
+        public string? TauntObjectName { get; set; }
+        public string? SkinObjectName { get; set; }
+        public string? GearSlotOneObjectName { get; set; }
+        public string? GearSlotTwoObjectName { get; set; }
+        public string? GearSlotThreeObjectName { get; set; }
 
-        public bool HumansHaveStarted { get; set; }
-	}
-
-    public class ServerConfig
-    {
-        public int Port { get; set; }
-
-        public string ServerStartupCommand { get; set; }
-
-		public int MaxNumPlayers { get; set; }
-
-		public ServerConfig(int port, string ServerStartupCommand, int MaxNumPlayers)
+        public PlayerConfig(LobbyPlayer lobbyPlayer)
         {
-            this.Port = port;
-            this.ServerStartupCommand = ServerStartupCommand;
-            this.MaxNumPlayers = MaxNumPlayers;
+            Name = lobbyPlayer.Name;
+            CharacterObjectName = lobbyPlayer.CharacterObjectName; // This is validated as not null by launch reqs
+            TauntObjectName = lobbyPlayer.TauntObjectName;
+            SkinObjectName = lobbyPlayer.SkinObjectName;
+            GearSlotOneObjectName = lobbyPlayer.GearSlotOneObjectName;
+            GearSlotTwoObjectName = lobbyPlayer.GearSlotTwoObjectName;
+            GearSlotThreeObjectName = lobbyPlayer.GearSlotThreeObjectName;
         }
     }
 
     public class GameInstance
     {
-        public string InstanceName { get; set; }
-
-        public string HumanReadableInstanceMapMode { get; set; }
-
-		public int CurrentNumPlayers { get; set; }
-
-        public int MaxNumPlayers { get; set; }
-
-		public string ServerConnectString { get; set; }
-
-        public bool MatchStarted { get; set; }
-
-        public string ServerAuthToken;
-
-        public ServerConfig ServerConfig;
-
-        public int? PID;
-
-        public DateTime? LastUpdateTime;
-
-		public GameInstance(GameCreationConfig config, string publicip, int port) { 
-            this.InstanceName = config.InstanceName;
-            this.HumanReadableInstanceMapMode = config.HumanReadableInstanceMapMode;
-            this.MaxNumPlayers = config.MaxNumPlayers;
-            this.CurrentNumPlayers = 0;
-            this.MatchStarted = false;
-
-            this.ServerAuthToken = Guid.NewGuid().ToString();
-            this.ServerConfig = new ServerConfig(port, config.ServerStartupCommand, MaxNumPlayers);
-
-			this.ServerConnectString = "open "+publicip+":"+port.ToString();
-		}
+        public int PID { get; set; }
+        public string ConnectionString { get; set; }
+        public int Port { get; set; }
     }
 
     public class GameCreationConfig
@@ -153,12 +125,17 @@ namespace gamecontroller
 
 		public int MaxNumPlayers { get; set; }
 
-		public GameCreationConfig(string InstanceName, string HumanReadableInstanceMapMode, string ServerStartupCommand, int MaxNumPlayers)
-        {
-            this.InstanceName = InstanceName;
-            this.HumanReadableInstanceMapMode = HumanReadableInstanceMapMode;
-            this.ServerStartupCommand = ServerStartupCommand;
-            this.MaxNumPlayers = MaxNumPlayers;
-        }
+        public List<PlayerConfig> PlayerConfigs { get; set; }
+
+		public GameCreationConfig(Lobby lobby) //string InstanceName, string HumanReadableInstanceMapMode, string ServerStartupCommand, List<LobbyPlayer> lobbyPlayers
+		{
+            this.InstanceName = lobby.Name;
+            this.HumanReadableInstanceMapMode = lobby.HumanReadableMapModeName; // validated by launch reqs
+            this.ServerStartupCommand = lobby.ServerStartString; // validated by launch reqs
+
+			PlayerConfigs = lobby.LobbyPlayers.Select(e => new PlayerConfig(e)).ToList();
+
+			this.MaxNumPlayers = PlayerConfigs.Count;
+		}
     }
 }
