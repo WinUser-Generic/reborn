@@ -76,7 +76,7 @@ namespace Globals {
 
     std::shared_ptr<httplib::Client> GameCoordinatorHttpClient;
 
-    std::vector<GameCoordinator::ServerBrowserEntry> ServerBrowserEntries = std::vector<GameCoordinator::ServerBrowserEntry>();
+    std::vector<GameCoordinator::Lobby> Lobbies = std::vector<GameCoordinator::Lobby>();
 
     ELaunchSequenceState LaunchSequenceState = ELaunchSequenceState::NotOpen;
 
@@ -88,7 +88,7 @@ namespace Globals {
 
     bool DisplayWaitingForPlayers = false;
 
-    GameCoordinator::ServerBrowserEntry CurrentMatchEntry = GameCoordinator::ServerBrowserEntry();
+    std::optional<GameCoordinator::Lobby> CurrentLobby = std::optional<GameCoordinator::Lobby>();
 
     std::mutex NetworkObjectListMutex = std::mutex();
 

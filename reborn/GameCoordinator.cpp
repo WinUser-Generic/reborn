@@ -3,6 +3,7 @@
 #include "Globals.hpp"
 #include "Constants.hpp"
 
+/*
 namespace GameCoordinator {
     void CreateGame(std::string InstanceName, std::string HumanReadableInstanceMapMode, std::string ServerStartupCommand, int MaxNumPlayers, std::string Password) {
         httplib::Result result;
@@ -76,3 +77,4 @@ namespace GameCoordinator {
         return;
     }
 }
+*/
