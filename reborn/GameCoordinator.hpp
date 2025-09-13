@@ -144,7 +144,11 @@ namespace GameCoordinator {
 
     void RefreshAllLobbies();
 
-    void CreateLobby(std::string LobbyName, std::vector<std::string> LobbyTags, std::optional<std::string> LobbyPassword);
+    std::string CreateLobby(std::string LobbyName, std::vector<std::string> LobbyTags, std::optional<std::string> LobbyPassword);
+
+    bool JoinLobby(std::string LobbyGuid, std::optional<std::string> LobbyPassword);
+
+    void ConnectToWebsocket();
 };
 
 /*

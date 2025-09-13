@@ -120,8 +120,6 @@ namespace Globals {
 
     extern std::shared_ptr<httplib::Client> GameCoordinatorHttpClient;
 
-    extern std::vector<GameCoordinator::ServerBrowserEntry> ServerBrowserEntries;
-
     enum ELaunchSequenceState : int8_t {
         NotOpen = 0,
         CharacterSelect = 1,
@@ -138,8 +136,6 @@ namespace Globals {
     
     extern bool DisplayWaitingForPlayers;
 
-    extern GameCoordinator::ServerBrowserEntry CurrentMatchEntry;
-
     UWorld* GetGWorld();
 
     void OnWorldSwitch();
@@ -155,6 +151,14 @@ namespace Globals {
     extern bool CharacterSelectThisPossesionsTheRealOne;
 
     extern bool GearViewerOpen;
+
+    extern std::string MyGCGuid;
+    
+    extern std::string MyGCKey;
+
+    extern std::vector<GameCoordinator::Lobby> Lobbies;
+
+    extern std::optional<GameCoordinator::Lobby> CurrentLobby;
 
     namespace Telemetry {
         extern std::mutex TickrateMutex;

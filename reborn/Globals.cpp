@@ -102,6 +102,9 @@ namespace Globals {
 
     bool GearViewerOpen = false;
 
+    std::string MyGCGuid = "";
+    std::string MyGCKey = "";
+
     UWorld* GetGWorld() {
         return *reinterpret_cast<UWorld**>(baseAddress + 0x34dfca0);
     }
